@@ -1,0 +1,20 @@
+# Secrets — the Govee API key lives here and must NEVER be committed
+.env
+.env.local
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+web/dist/
+
+# Logs
+*.log
+
+# Bluetooth captures (contain device addresses; RE artifacts, not for the repo)
+captures/
+*.zip
+
+# OS cruft
+.DS_Store

@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CloudGrid — BLE Probe</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font: 14px/1.5 ui-monospace, "Cascadia Code", Menlo, monospace;
+         background:#0d1117; color:#c9d1d9; margin:0; padding:24px; }
+  h1 { font-size:18px; margin:0 0 4px; color:#58a6ff; }
+  .sub { color:#8b949e; margin:0 0 20px; }
+  button { font:inherit; background:#21262d; color:#c9d1d9; border:1px solid #30363d;
+           border-radius:6px; padding:8px 12px; cursor:pointer; margin:3px; }
+  button:hover { background:#30363d; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  button.primary { background:#238636; border-color:#2ea043; color:#fff; }
+  .panel { border:1px solid #30363d; border-radius:8px; padding:14px; margin-bottom:16px; }
+  .panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em;
+              color:#8b949e; margin:0 0 10px; }
+  label { color:#8b949e; margin-right:6px; }
+  input[type=text], input[type=number] { font:inherit; background:#0d1117; color:#c9d1d9;
+           border:1px solid #30363d; border-radius:6px; padding:6px 8px; }
+  input[type=text]{ width:340px; }
+  #log { background:#010409; border:1px solid #30363d; border-radius:8px; padding:12px;
+         height:340px; overflow:auto; white-space:pre-wrap; }
+  .ok{color:#3fb950;} .err{color:#f85149;} .rx{color:#d29922;} .tx{color:#58a6ff;}
+  .dim{color:#6e7681;}
+  .row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:6px 0; }
+</style>
+</head>
+<body>
+  <h1>CloudGrid — BLE Probe</h1>
+  <p class="sub">Talk to the H703B directly over Web Bluetooth. Close the Govee app first (one BLE connection at a time).</p>
+
+  <div class="panel">
+    <h2>Connection</h2>
+    <div class="row">
+      <button id="connect" class="primary">Connect to a Govee device</button>
+      <button id="disconnect" disabled>Disconnect</button>
+      <span id="status" class="dim">not connected</span>
+    </div>
+    <div class="dim" id="gatt"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Known plaintext commands (does the light obey?)</h2>
+    <div class="row">
+      <button class="cmd" data-hex="33 01 01" disabled>Power ON</button>
+      <button class="cmd" data-hex="33 01 00" disabled>Power OFF</button>
+    </div>
+    <div class="row">
+      <label>Brightness</label>
+      <input type="number" id="bri" min="0" max="100" value="80" />
+      <button id="briSend" disabled>Set brightness</button>
+    </div>
+    <div class="row">
+      <label>Pick a color &rarr;</label>
+      <input type="color" id="col" value="#0000ff" />
+      <button id="colD" disabled>Set WHOLE strand to this color &#10003;</button>
+      <button id="col15" disabled>Set ALL segments to this color</button>
+    </div>
+    <div class="dim">The two buttons above both work. The picked color (the swatch) is what gets sent.</div>
+  </div>
+
+  <div class="panel">
+    <h2>Per-segment hunt (find the format that lights ONE segment)</h2>
+    <div class="row">
+      <label>Segment #</label>
+      <input type="number" id="seg" min="0" max="263" value="5" style="width:80px" />
+      <button id="segMask" disabled>Try A: by bitmask</button>
+      <button id="segIdx" disabled>Try B: by index</button>
+      <button id="segIdx2" disabled>Try C: index + 0x01</button>
+    </div>
+    <div class="dim">Goal: a button where only that segment changes to the picked color. Report which (if any) isolates one segment, and roughly which physical dots react.</div>
+  </div>
+
+  <div class="panel">
+    <h2>DIY scene (a3) &mdash; real per-dot control</h2>
+    <div class="row">
+      <label>Segment #</label>
+      <input type="number" id="asSeg" min="0" max="200" value="0" style="width:70px" />
+      <input type="color" id="asCol" value="#ff0000" />
+      <button id="asSet" disabled>Set this segment</button>
+      <button id="asClear" disabled>Clear all</button>
+    </div>
+    <div class="row">
+      <button id="asReplay" disabled class="primary">Replay captured 3-color (0=green, 43=blue, 87=red)</button>
+      <button id="asWalk" disabled>Walk a3 0&rarr;90</button>
+    </div>
+    <div class="dim">Builds the decoded a3 stream: header + count + entries [01 R G B segIdx], then the 33 05 0a 20 03 commit. Replay should reproduce green/blue/red at first/middle/last. Walk maps segment index to physical position (one lit dot at a time).</div>
+  </div>
+
+  <div class="panel">
+    <h2>Per-segment control (OLD whole-strand format — ignore)</h2>
+    <div class="row">
+      <label>Segment #</label>
+      <input type="number" id="dsSeg" min="0" max="44" value="0" style="width:70px" />
+      <input type="color" id="dsCol" value="#ff0000" />
+      <button id="dsSet" disabled>Set this segment</button>
+      <button id="dsClear" disabled>Clear (all off)</button>
+    </div>
+    <div class="row">
+      <button id="dsWalk" disabled>Walk a dot 0&rarr;43</button>
+      <button id="dsRainbow" disabled class="primary">&#127752; Rainbow all 44</button>
+    </div>
+    <div class="row">
+      <label>Mask layout</label>
+      <label><input type="radio" name="dslay" value="be" checked /> big-endian [7-12]</label>
+      <label><input type="radio" name="dslay" value="le" /> little-endian [12-17]</label>
+      <label style="margin-left:10px"><input type="checkbox" id="dsPrep" /> prep (0a 20 03) first</label>
+    </div>
+    <div class="dim">Seg 0 + big-endian + prep-off replays the exact captured packet. If Walk shows one dot moving along the string in order, the mask layout is correct. Rainbow proves full per-dot control.</div>
+  </div>
+
+  <div class="panel">
+    <h2>Brute-force segment sweep</h2>
+    <div class="row">
+      <label>Target segment #</label>
+      <input type="number" id="swSeg" min="0" max="263" value="3" style="width:70px" />
+      <label>Delay ms</label>
+      <input type="number" id="swDelay" min="100" max="8000" value="450" style="width:80px" />
+      <button id="swStart" disabled>Start sweep</button>
+      <button id="swStop" disabled>Stop</button>
+      <button id="swNext" disabled>Step &#9654;</button>
+      <button id="swMark" disabled class="primary">&#11088; Mark this one</button>
+    </div>
+    <div id="swStatus" class="dim" style="font-size:15px; color:#d29922; padding:6px 0;">idle</div>
+    <div class="dim">Each step paints the WHOLE strand blue, then fires one candidate trying to turn segment N red. Watch for a combo where only PART changes (a dot or a strip) — that's the format. The instant you see it, hit &#11088; Mark. A combo that turns EVERYTHING red is a whole-strand format, not what we want.</div>
+  </div>
+
+  <div class="panel">
+    <h2>Raw packet console (RE workbench)</h2>
+    <div class="row">
+      <input type="text" id="raw" placeholder="e.g. 33 05 02 ff 00 00  (checksum auto-appended)" />
+      <button id="rawSend" disabled>Send raw</button>
+    </div>
+    <div class="dim">Type the leading bytes; the 20-byte pad + XOR checksum are added for you.</div>
+  </div>
+
+  <div class="panel">
+    <h2>Log</h2>
+    <div id="log"></div>
+  </div>
+
+<script type="module">
+// Govee BLE GATT (older-generation, our working hypothesis for the H703B)
+const SERVICE = "00010203-0405-0607-0809-0a0b0c0d1910";
+const WRITE   = "00010203-0405-0607-0809-0a0b0c0d2b11";
+const NOTIFY  = "00010203-0405-0607-0809-0a0b0c0d2b10";
+
+const $ = (id) => document.getElementById(id);
+const logEl = $("log");
+let writeChar = null, device = null;
+
+function log(msg, cls = "") {
+  const t = new Date().toLocaleTimeString();
+  const line = document.createElement("div");
+  if (cls) line.className = cls;
+  line.textContent = `[${t}] ${msg}`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function hex(bytes) {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join(" ");
+}
+
+// 20-byte Govee packet: leading bytes + zero pad + XOR-of-first-19 checksum.
+function buildPacket(leading) {
+  const b = new Uint8Array(20);
+  b.set(leading.slice(0, 19));
+  let c = 0;
+  for (let i = 0; i < 19; i++) c ^= b[i];
+  b[19] = c;
+  return b;
+}
+
+let lastSent = null;
+async function send(leading, label, opts = {}) {
+  if (!writeChar) return log("not connected", "err");
+  const pkt = buildPacket(leading);
+  try {
+    // writeWithoutResponse is what the Govee app uses; fall back if unsupported.
+    if (writeChar.writeValueWithoutResponse) await writeChar.writeValueWithoutResponse(pkt);
+    else await writeChar.writeValue(pkt);
+    lastSent = { label, hex: hex(pkt) };
+    if (!opts.quiet) log(`TX ${label ? label + "  " : ""}${hex(pkt)}`, "tx");
+  } catch (e) {
+    if (!opts.quiet) log(`TX failed: ${e.message}`, "err");
+  }
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Govee lights drop the BLE link after ~30s of silence. Send the 0xaa
+// keep-alive every 2s (same cadence the official app uses) to hold it open.
+let keepAlive = null;
+function startKeepAlive() {
+  stopKeepAlive();
+  keepAlive = setInterval(async () => {
+    if (!writeChar) return;
+    try {
+      const pkt = buildPacket([0xaa, 0x01]);
+      if (writeChar.writeValueWithoutResponse) await writeChar.writeValueWithoutResponse(pkt);
+      else await writeChar.writeValue(pkt);
+    } catch { /* connection going away; disconnect handler will clean up */ }
+  }, 2000);
+}
+function stopKeepAlive() {
+  if (keepAlive) { clearInterval(keepAlive); keepAlive = null; }
+}
+
+function enableCmds(on) {
+  document.querySelectorAll(".cmd, #briSend, #colD, #col15, #segMask, #segIdx, #segIdx2, #rawSend, #swStart, #swStop, #swNext, #swMark, #dsSet, #dsClear, #dsWalk, #dsRainbow, #asSet, #asClear, #asReplay, #asWalk")
+    .forEach((b) => (b.disabled = !on));
+}
+
+function rgb() {
+  const v = $("col").value; // #rrggbb
+  return [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
+}
+
+$("connect").addEventListener("click", async () => {
+  if (!navigator.bluetooth) return log("Web Bluetooth not available. Use Chrome/Edge on Windows over http://localhost.", "err");
+  try {
+    log("requesting device… (pick your H703B in the chooser)");
+    device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [SERVICE],
+    });
+    log(`selected: ${device.name || "(no name)"} [${device.id}]`);
+    device.addEventListener("gattserverdisconnected", () => {
+      log("device disconnected", "err");
+      stopKeepAlive();
+      $("status").textContent = "disconnected";
+      $("disconnect").disabled = true; $("connect").disabled = false; enableCmds(false);
+      writeChar = null;
+    });
+
+    // BLE on Windows often fails the first connect; retry a few times.
+    let server = null;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        log(`connecting… (attempt ${attempt}/4)`);
+        server = await device.gatt.connect();
+        break;
+      } catch (e) {
+        log(`  attempt ${attempt} failed: ${e.message}`, "dim");
+        if (attempt === 4) throw e;
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    }
+    log("GATT connected", "ok");
+
+    // Enumerate everything so we can see what this SKU actually exposes.
+    const services = await server.getPrimaryServices();
+    let gattDump = "";
+    for (const s of services) {
+      gattDump += `\nservice ${s.uuid}`;
+      const chars = await s.getCharacteristics();
+      for (const c of chars) {
+        const p = c.properties;
+        const flags = [p.write && "write", p.writeWithoutResponse && "writeNR",
+          p.notify && "notify", p.read && "read"].filter(Boolean).join(",");
+        gattDump += `\n   char ${c.uuid}  [${flags}]`;
+      }
+    }
+    $("gatt").textContent = gattDump.trim();
+    log("enumerated GATT (see panel above)", "dim");
+
+    // Grab the expected Govee write characteristic.
+    try {
+      const svc = await server.getPrimaryService(SERVICE);
+      writeChar = await svc.getCharacteristic(WRITE);
+      log("found Govee write characteristic ✓", "ok");
+      try {
+        const notify = await svc.getCharacteristic(NOTIFY);
+        await notify.startNotifications();
+        notify.addEventListener("characteristicvaluechanged", (ev) => {
+          const v = new Uint8Array(ev.target.value.buffer);
+          log(`RX ${hex(v)}`, "rx");
+        });
+        log("subscribed to notifications ✓", "ok");
+      } catch { log("no notify characteristic (ok, replies just won't show)", "dim"); }
+    } catch (e) {
+      log(`Govee service/char NOT found: ${e.message}. This SKU may use a different UUID — check the GATT dump above.`, "err");
+    }
+
+    $("status").textContent = "connected";
+    $("connect").disabled = true; $("disconnect").disabled = false;
+    if (writeChar) {
+      enableCmds(true);
+      startKeepAlive();
+      log("keep-alive started (0xaa every 2s) — connection will stay open", "ok");
+    }
+  } catch (e) {
+    log(`connect failed: ${e.message}`, "err");
+  }
+});
+
+$("disconnect").addEventListener("click", () => {
+  if (device?.gatt?.connected) device.gatt.disconnect();
+});
+
+document.querySelectorAll(".cmd").forEach((btn) =>
+  btn.addEventListener("click", () => {
+    const bytes = btn.dataset.hex.split(/\s+/).map((h) => parseInt(h, 16));
+    send(bytes, btn.textContent);
+  }),
+);
+
+$("briSend").addEventListener("click", () => {
+  const v = Math.max(0, Math.min(100, Number($("bri").value)));
+  send([0x33, 0x04, v], `brightness ${v}`);
+});
+
+$("colD").addEventListener("click", () => send([0x33, 0x05, 0x0d, ...rgb()], "whole strand 050d"));
+$("col15").addEventListener("click", () =>
+  send([0x33, 0x05, 0x15, 0x01, 0xff, 0xff, ...rgb()], "all segments 0515"));
+
+function segIndex() { return Math.max(0, Math.min(263, Number($("seg").value))); }
+
+// Try A: 16-bit bitmask after 0x01 (the cousin format — we already saw it doesn't isolate; kept for comparison).
+$("segMask").addEventListener("click", () => {
+  const idx = segIndex();
+  const mask = 1 << (idx % 16);
+  send([0x33, 0x05, 0x15, 0x01, mask & 0xff, (mask >> 8) & 0xff, ...rgb()], `A: mask seg ${idx}`);
+});
+// Try B: segment index directly after 0x15, then RGB (no mask byte).
+$("segIdx").addEventListener("click", () => {
+  const idx = segIndex();
+  send([0x33, 0x05, 0x15, idx, ...rgb()], `B: index seg ${idx}`);
+});
+// Try C: 0x15, then 0x01, then a single index byte, then RGB.
+$("segIdx2").addEventListener("click", () => {
+  const idx = segIndex();
+  send([0x33, 0x05, 0x15, 0x01, idx, ...rgb()], `C: idx+01 seg ${idx}`);
+});
+
+// ---- Per-segment control (decoded format) -----------------------------
+// Captured: 33 05 15 01 <R G B> 00 00 00 00 00 <6-byte segment mask>.
+// Segment 0 => low bit at packet byte 12.
+const dsLayout = () => document.querySelector('input[name="dslay"]:checked').value;
+
+function dsRgb() {
+  const v = $("dsCol").value;
+  return [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
+}
+
+function hueRgb(h) { // h in [0,1) -> vivid RGB
+  const i = Math.floor(h * 6), f = h * 6 - i, q = 1 - f;
+  const m = [[1, f, 0], [q, 1, 0], [0, 1, f], [0, q, 1], [f, 0, 1], [1, 0, q]][i % 6];
+  return m.map((x) => Math.round(x * 255));
+}
+
+// Build the 19-byte body (buildPacket appends the checksum) for one segment.
+function segPacket(n, [r, g, b], layout) {
+  const body = [0x33, 0x05, 0x15, 0x01, r, g, b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const off = Math.floor(n / 8), bit = n % 8;
+  const idx = layout === "be" ? 12 - off : 12 + off; // both put seg0 at byte 12
+  if (idx >= 7 && idx <= 18) body[idx] |= (1 << bit);
+  return body;
+}
+
+async function dsDoPrep() {
+  if ($("dsPrep").checked) {
+    await send([0x33, 0x05, 0x0a, 0x20, 0x03], "prep", { quiet: true });
+    await sleep(50);
+  }
+}
+async function setSeg(n, rgb) {
+  await dsDoPrep();
+  await send(segPacket(n, rgb, dsLayout()), `seg ${n} (${dsLayout()})`);
+}
+
+$("dsSet").addEventListener("click", () =>
+  setSeg(Math.max(0, Math.min(44, Number($("dsSeg").value))), dsRgb()));
+$("dsClear").addEventListener("click", () => send([0x33, 0x05, 0x0d, 0, 0, 0], "all off"));
+
+$("dsWalk").addEventListener("click", async () => {
+  await dsDoPrep();
+  log("walk: lighting segments 0→44 in order (watch the physical position)", "ok");
+  for (let n = 0; n <= 44; n++) {
+    await send(segPacket(n, [255, 0, 0], dsLayout()), `walk ${n}`, { quiet: true });
+    await sleep(200);
+  }
+  log("walk done — did the dots light in physical order? Which indices stayed dark?", "ok");
+});
+
+$("dsRainbow").addEventListener("click", async () => {
+  await dsDoPrep();
+  log("rainbow: setting all 44 segments to distinct hues", "ok");
+  for (let n = 0; n <= 44; n++) {
+    await send(segPacket(n, hueRgb(n / 45), dsLayout()), `rainbow ${n}`, { quiet: true });
+    await sleep(45);
+  }
+  log("rainbow sent — full per-dot control if you see 44 colors", "ok");
+});
+
+// ---- DIY scene (a3) — decoded per-dot format --------------------------
+// Stream = header(9) + count(1) + entries(5 each: [01][R][G][B][segIdx]).
+// Packets carry 17 payload bytes; first=a3 00, middles=a3 01/02.., last=a3 ff.
+function a3Scene(entries) {
+  const payload = [0x01, 0x02, 0x03, 0x13, 0x32, 0x64, 0x01, 0x01, 0x01, entries.length];
+  for (const e of entries) payload.push(0x01, e.r, e.g, e.b, e.seg);
+  const total = Math.max(2, Math.ceil(payload.length / 17));
+  const pkts = [];
+  for (let i = 0; i < total; i++) {
+    const chunk = payload.slice(i * 17, i * 17 + 17);
+    while (chunk.length < 17) chunk.push(0);
+    const index = i === total - 1 ? 0xff : i;
+    pkts.push([0xa3, index, ...chunk]); // 19 bytes; send() appends the XOR checksum
+  }
+  return pkts;
+}
+async function sendScene(entries, quiet = false) {
+  for (const p of a3Scene(entries)) {
+    await send(p, `a3 ${p[1].toString(16).padStart(2, "0")}`, { quiet });
+    await sleep(25);
+  }
+  await send([0x33, 0x05, 0x0a, 0x20, 0x03], "commit", { quiet });
+}
+function asRgb() {
+  const v = $("asCol").value;
+  return [parseInt(v.slice(1, 3), 16), parseInt(v.slice(3, 5), 16), parseInt(v.slice(5, 7), 16)];
+}
+
+$("asSet").addEventListener("click", async () => {
+  const [r, g, b] = asRgb();
+  const seg = Math.max(0, Math.min(200, Number($("asSeg").value)));
+  await sendScene([{ seg, r, g, b }]);
+  log(`a3: set segment ${seg}`, "ok");
+});
+$("asClear").addEventListener("click", async () => { await sendScene([]); log("a3: cleared", "ok"); });
+$("asReplay").addEventListener("click", async () => {
+  await sendScene([
+    { seg: 0x00, r: 0, g: 255, b: 0 },   // first -> green
+    { seg: 0x2b, r: 0, g: 0, b: 255 },   // middle -> blue
+    { seg: 0x57, r: 255, g: 0, b: 0 },   // last -> red
+  ]);
+  log("a3: replayed captured 3-color scene", "ok");
+});
+$("asWalk").addEventListener("click", async () => {
+  log("a3 walk: one segment at a time 0→90 (watch the physical position)", "ok");
+  for (let n = 0; n <= 90; n++) {
+    await sendScene([{ seg: n, r: 255, g: 0, b: 0 }], true);
+    await sleep(180);
+  }
+  log("a3 walk done — note which physical dot maps to which index", "ok");
+});
+
+// ---- Brute-force segment sweep ----------------------------------------
+const BASE_RGB = [0x00, 0x00, 0xff]; // blue baseline (whole strand)
+const TEST_RGB = [0xff, 0x00, 0x00]; // red test color
+const hx = (n) => n.toString(16).padStart(2, "0");
+
+// Build a broad set of candidate "set segment N to red" packet formats.
+function buildCandidates(N) {
+  const [r, g, b] = TEST_RGB;
+  const lo8 = N < 8 ? (1 << N) : 0;
+  const hi8 = N >= 8 ? (1 << (N - 8)) : 0;
+  const m16 = 1 << (N % 16);
+  const mlo = m16 & 0xff, mhi = (m16 >> 8) & 0xff;
+  const page = Math.floor(N / 16);
+  const c = [];
+  const add = (label, bytes) => c.push({ label, bytes });
+
+  // Wide sub-opcode sweep: 0x33 05 <op> <idx> R G B for op 0x00..0x1f.
+  // (Includes power/brightness ops as harmless noise — baseline repaints.)
+  for (let op = 0x00; op <= 0x1f; op++)
+    add(`op${hx(op)} idx`, [0x33, 0x05, op, N, r, g, b]);
+
+  // 0x15 mask variants — little- AND big-endian (byte order is a prime suspect).
+  add("15 01 maskLE", [0x33, 0x05, 0x15, 0x01, mlo, mhi, r, g, b]);
+  add("15 01 maskBE", [0x33, 0x05, 0x15, 0x01, mhi, mlo, r, g, b]);
+  add(`15 pg${page} maskLE`, [0x33, 0x05, 0x15, page, mlo, mhi, r, g, b]);
+  add("0b mask8x2", [0x33, 0x05, 0x0b, lo8, hi8, r, g, b]);
+  add("0a mask8x2", [0x33, 0x05, 0x0a, lo8, hi8, r, g, b]);
+
+  // 0x15 structural index variants.
+  add("15 01 cnt1 idx", [0x33, 0x05, 0x15, 0x01, 0x01, N, r, g, b]);
+  add("15 idx 01", [0x33, 0x05, 0x15, N, 0x01, r, g, b]);
+  add("15 01 00 idx", [0x33, 0x05, 0x15, 0x01, 0x00, N, r, g, b]);
+  add("15 rgb idx", [0x33, 0x05, 0x15, r, g, b, N]);
+  add("15 idx+1", [0x33, 0x05, 0x15, N + 1, r, g, b]);
+  return c;
+}
+
+let swRunning = false, swCands = [], swPos = 0;
+const setSw = (m) => ($("swStatus").textContent = m);
+
+async function swStep() {
+  if (swPos >= swCands.length) {
+    setSw(`done — ${swCands.length} combos sent. Change segment # and re-run if nothing hit.`);
+    log("sweep complete", "ok");
+    swRunning = false;
+    return false;
+  }
+  const cand = swCands[swPos];
+  // Baseline: force power on, then whole strand blue, so a partial red pops.
+  await send([0x33, 0x01, 0x01], "on", { quiet: true });
+  await send([0x33, 0x05, 0x0d, ...BASE_RGB], "baseline blue", { quiet: true });
+  const settle = Math.min(300, Math.max(80, (Number($("swDelay").value) || 450) * 0.35));
+  await sleep(settle);
+  const n = swPos + 1;
+  await send(cand.bytes, `sweep ${n}/${swCands.length}: ${cand.label}`);
+  setSw(`▶ ${n}/${swCands.length}   ${cand.label}   ${hex(buildPacket(cand.bytes))}`);
+  swPos++;
+  return true;
+}
+
+async function swRun() {
+  const delay = Math.max(800, Number($("swDelay").value) || 2500);
+  while (swRunning) {
+    const more = await swStep();
+    if (!more) break;
+    await sleep(delay);
+  }
+}
+
+$("swStart").addEventListener("click", () => {
+  if (swRunning) return;
+  const seg = Math.max(0, Math.min(263, Number($("swSeg").value)));
+  swCands = buildCandidates(seg);
+  swPos = 0;
+  swRunning = true;
+  log(`sweep started: ${swCands.length} candidates targeting segment ${seg}`, "ok");
+  swRun();
+});
+$("swStop").addEventListener("click", () => {
+  swRunning = false;
+  setSw(`stopped at ${swPos}/${swCands.length}`);
+  log("sweep stopped", "dim");
+});
+$("swNext").addEventListener("click", async () => {
+  if (swCands.length === 0 || swPos >= swCands.length) {
+    const seg = Math.max(0, Math.min(263, Number($("swSeg").value)));
+    swCands = buildCandidates(seg);
+    swPos = 0;
+  }
+  swRunning = false;
+  await swStep();
+});
+$("swMark").addEventListener("click", () => {
+  if (lastSent) log(`⭐ MARKED: ${lastSent.label}   ${lastSent.hex}`, "ok");
+  else log("nothing sent yet to mark", "dim");
+});
+
+$("rawSend").addEventListener("click", () => {
+  const bytes = $("raw").value.trim().split(/\s+/).filter(Boolean).map((h) => parseInt(h, 16));
+  if (bytes.some((b) => Number.isNaN(b))) return log("raw: invalid hex", "err");
+  send(bytes, "raw");
+});
+</script>
+</body>
+</html>
