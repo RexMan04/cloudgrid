@@ -96,7 +96,7 @@ export class GoveeDevice {
   async setScene(entries: SegEntry[], opts?: SceneOpts) {
     for (const leading of buildSceneLeadings(entries, opts)) {
       await this.send(leading);
-      await sleep(25);
+      await sleep(10);
     }
     await this.send(COMMIT);
   }

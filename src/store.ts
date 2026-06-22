@@ -88,10 +88,13 @@ let animFrame = 0;
 const animSleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Serialize whole scenes (animation frames + static pushes) so their packets
-// never interleave on the wire.
+// never interleave on the wire. A generation counter lets a priority action
+// (Clear) skip scenes that are queued but not yet started.
 let sceneChain: Promise<unknown> = Promise.resolve();
+let sceneGen = 0;
 function queueScene(fn: () => Promise<void>): Promise<void> {
-  const run = sceneChain.then(fn);
+  const myGen = sceneGen;
+  const run = sceneChain.then(() => (myGen === sceneGen ? fn() : undefined));
   sceneChain = run.catch(() => {});
   return run;
 }
@@ -197,7 +200,9 @@ export const useStore = create<State>()(
           set({ colors: Array(totalSegments(get().sections)).fill(null) });
           if (animRunning) { animRunning = false; set({ animationId: null }); }
           // An empty scene + a motion effect doesn't reliably go dark, so send
-          // an explicit whole-strand off.
+          // an explicit whole-strand off. Bump the generation so any queued
+          // scene is skipped and the off goes out as soon as the wire is free.
+          sceneGen++;
           const dev = get().device;
           if (dev?.connected) {
             set({ status: "cleared" });
