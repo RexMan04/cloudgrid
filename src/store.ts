@@ -87,6 +87,15 @@ let animRunning = false;
 let animFrame = 0;
 const animSleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Serialize whole scenes (animation frames + static pushes) so their packets
+// never interleave on the wire.
+let sceneChain: Promise<unknown> = Promise.resolve();
+function queueScene(fn: () => Promise<void>): Promise<void> {
+  const run = sceneChain.then(fn);
+  sceneChain = run.catch(() => {});
+  return run;
+}
+
 export const useStore = create<State>()(
   persist(
     (set, get) => {
@@ -196,7 +205,12 @@ export const useStore = create<State>()(
         push: async () => {
           const { device } = get();
           if (!device?.connected) return;
-          if (animRunning) return; // the animation loop is driving the lights
+          // Any static push (effect change, paint, pattern, image...) ends a
+          // running live animation rather than being ignored by it.
+          if (animRunning) {
+            animRunning = false;
+            set({ animationId: null });
+          }
           if (pushing) { pendingPush = true; return; }
           pushing = true;
           set({ busy: true });
@@ -217,7 +231,7 @@ export const useStore = create<State>()(
                   });
                 }
               });
-              await device.setScene(entries, { dir: get().effect, speed: get().speed });
+              await queueScene(() => device.setScene(entries, { dir: get().effect, speed: get().speed }));
               set({ status: `pushed ${entries.length} lit segment(s)` });
             } while (pendingPush);
           } catch (e) {
@@ -265,7 +279,7 @@ export const useStore = create<State>()(
                 }
               }
               try {
-                await st.device.setScene(entries, { dir: 0x13, speed: st.speed });
+                await queueScene(() => st.device!.setScene(entries, { dir: 0x13, speed: st.speed }));
               } catch {
                 /* frame dropped; keep going */
               }
