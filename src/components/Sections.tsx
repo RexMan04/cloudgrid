@@ -58,6 +58,22 @@ export function Sections() {
             >
               {sec.reversed ? "Reversed ⮌" : "Reverse"}
             </button>
+            <button
+              className={sec.serpentine ? "active" : ""}
+              onClick={() => useStore.getState().toggleSerpentine(si)}
+            >
+              {sec.serpentine ? "Snake ⮌⮍" : "Snake"}
+            </button>
+            <label>run</label>
+            <input
+              type="number"
+              min={1}
+              max={45}
+              value={sec.runLength}
+              onChange={(e) => useStore.getState().setRunLength(si, Number(e.target.value))}
+              style={{ width: 56 }}
+              title="segments per run (e.g. rows per column) for snake/zigzag"
+            />
             {sections.length > 1 && (
               <button onClick={() => useStore.getState().removeSection(si)}>Remove</button>
             )}

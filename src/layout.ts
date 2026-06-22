@@ -6,6 +6,21 @@
 export interface Section {
   length: number; // number of segments in this section (1..45)
   reversed: boolean; // true if this section is wired/mounted in reverse
+  serpentine: boolean; // true if the strip zigzags (alternate runs flipped)
+  runLength: number; // segments per run (e.g. rows per column), for serpentine
+}
+
+/** Map a position within a section (logical) to its physical position. */
+export function localPhysical(p: number, s: Section): number {
+  // Serpentine: reverse every other run so a clean grid lines up on a snaking strip.
+  if (s.serpentine && s.runLength > 0) {
+    const run = Math.floor(p / s.runLength);
+    const pos = p % s.runLength;
+    if (run % 2 === 1) p = run * s.runLength + (s.runLength - 1 - pos);
+  }
+  // Whole-section reversal (backwards-mounted run).
+  if (s.reversed) p = s.length - 1 - p;
+  return p;
 }
 
 export const totalSegments = (sections: Section[]): number =>
@@ -31,8 +46,7 @@ export function logicalToPhysical(p: number, sections: Section[]): number {
   let offset = 0;
   for (const s of sections) {
     if (p < offset + s.length) {
-      const local = p - offset;
-      return offset + (s.reversed ? s.length - 1 - local : local);
+      return offset + localPhysical(p - offset, s);
     }
     offset += s.length;
   }

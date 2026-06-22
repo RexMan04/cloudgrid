@@ -11,10 +11,8 @@ export function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
-const DEFAULT_SECTIONS: Section[] = [
-  { length: 44, reversed: false },
-  { length: 44, reversed: false },
-];
+const newSection = (): Section => ({ length: 44, reversed: false, serpentine: false, runLength: 11 });
+const DEFAULT_SECTIONS: Section[] = [newSection(), newSection()];
 
 const resizeColors = (prev: (string | null)[], total: number): (string | null)[] =>
   Array.from({ length: total }, (_, i) => prev[i] ?? null);
@@ -41,6 +39,8 @@ interface State {
   removeSection: (i: number) => void;
   setSectionLength: (i: number, len: number) => void;
   toggleReverse: (i: number) => void;
+  toggleSerpentine: (i: number) => void;
+  setRunLength: (i: number, n: number) => void;
 
   applyCell: (logicalIndex: number) => void;
   clear: () => void;
@@ -92,7 +92,7 @@ export const useStore = create<State>((set, get) => {
     // One controller (one BLE connection) drives exactly two sections.
     addSection: () => {
       if (get().sections.length >= 2) return;
-      setSections([...get().sections, { length: 44, reversed: false }]);
+      setSections([...get().sections, newSection()]);
     },
     removeSection: (i) => {
       if (get().sections.length <= 1) return;
@@ -105,6 +105,15 @@ export const useStore = create<State>((set, get) => {
     toggleReverse: (i) => {
       set({ sections: get().sections.map((s, idx) => (idx === i ? { ...s, reversed: !s.reversed } : s)) });
       void get().push(); // re-map immediately so the calibration is visible
+    },
+    toggleSerpentine: (i) => {
+      set({ sections: get().sections.map((s, idx) => (idx === i ? { ...s, serpentine: !s.serpentine } : s)) });
+      void get().push();
+    },
+    setRunLength: (i, n) => {
+      const clamped = Math.max(1, Math.min(45, n || 1));
+      set({ sections: get().sections.map((s, idx) => (idx === i ? { ...s, runLength: clamped } : s)) });
+      void get().push();
     },
 
     applyCell: (logicalIndex) => {
