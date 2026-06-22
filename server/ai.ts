@@ -43,7 +43,7 @@ export async function generatePattern(desc: string, w: number, h: number): Promi
   let text = "";
 
   if (ANTHROPIC_KEY) {
-    const model = process.env.GOVEE_AI_MODEL || "claude-opus-4-8";
+    const model = process.env.GOVEE_AI_MODEL || "claude-sonnet-4-6";
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
