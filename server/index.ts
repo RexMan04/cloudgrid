@@ -4,6 +4,7 @@
 
 import { join } from "node:path";
 import { listDevices, supportsSegmentColor, segmentCount, GoveeError } from "./govee.ts";
+import { generatePattern } from "./ai.ts";
 
 const PROBE_HTML = join(import.meta.dir, "..", "web", "probe.html");
 
@@ -39,6 +40,31 @@ const server = Bun.serve({
   port: PORT,
   async fetch(req) {
     const url = new URL(req.url);
+
+    // CORS preflight for the Vite frontend (different port).
+    if (req.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+      });
+    }
+
+    // POST /api/generate — AI pattern generator. Body: {prompt,width,height}.
+    if (url.pathname === "/api/generate" && req.method === "POST") {
+      try {
+        const body = (await req.json()) as { prompt?: string; width?: number; height?: number };
+        const w = Math.max(1, Math.min(64, Number(body.width) || 8));
+        const h = Math.max(1, Math.min(45, Number(body.height) || 11));
+        const grid = await generatePattern(String(body.prompt ?? ""), w, h);
+        return json({ grid });
+      } catch (err) {
+        return json({ error: String(err instanceof Error ? err.message : err) }, 500);
+      }
+    }
 
     // GET /api/devices — proxy the Govee device list, annotated with the one
     // fact the grid UI depends on: does each device expose segmentedColorRgb?
@@ -79,5 +105,6 @@ const server = Bun.serve({
 });
 
 console.log(`CloudGrid proxy listening on http://localhost:${server.port}`);
-console.log(`  GET /api/devices   list + flag segmentedColorRgb support`);
-console.log(`  GET /api/health    liveness check`);
+console.log(`  GET  /api/devices   list + flag segmentedColorRgb support`);
+console.log(`  POST /api/generate  AI pattern generator (needs an AI key in .env)`);
+console.log(`  GET  /api/health    liveness check`);

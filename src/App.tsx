@@ -5,6 +5,7 @@ import { Patterns } from "./components/Patterns";
 import { Effects } from "./components/Effects";
 import { LiveAnimate } from "./components/LiveAnimate";
 import { GifVideo } from "./components/GifVideo";
+import { AiGenerate } from "./components/AiGenerate";
 import { Canvas } from "./components/Canvas";
 import { Sections } from "./components/Sections";
 
@@ -26,6 +27,7 @@ export function App() {
       <LiveAnimate />
       <ImageImport />
       <GifVideo />
+      <AiGenerate />
       <Canvas />
       <Sections />
 
