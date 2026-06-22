@@ -89,7 +89,11 @@ export const useStore = create<State>((set, get) => {
     setErasing: (v) => set({ erasing: v }),
     setColumns: (n) => set({ columns: Math.max(1, Math.min(48, n)) }),
 
-    addSection: () => setSections([...get().sections, { length: 44, reversed: false }]),
+    // One controller (one BLE connection) drives exactly two sections.
+    addSection: () => {
+      if (get().sections.length >= 2) return;
+      setSections([...get().sections, { length: 44, reversed: false }]);
+    },
     removeSection: (i) => {
       if (get().sections.length <= 1) return;
       setSections(get().sections.filter((_, idx) => idx !== i));

@@ -27,9 +27,15 @@ export function Sections() {
     <div className="sections">
       <div className="row">
         <strong>Sections</strong>
-        <button onClick={() => useStore.getState().addSection()}>+ Add section</button>
+        <button
+          onClick={() => useStore.getState().addSection()}
+          disabled={sections.length >= 2}
+        >
+          + Add section
+        </button>
         <span className="dim">
-          one run per controller (cut to any length ≤45). Reverse a section if it's mounted backwards.
+          one controller drives 2 sections (cut to any length ≤45). Reverse a section if it's
+          mounted backwards. More than 2 sections needs another controller (multi-device, coming).
         </span>
       </div>
 
