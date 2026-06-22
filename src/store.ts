@@ -2,7 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { GoveeDevice } from "./govee/ble";
 import type { SegEntry } from "./govee/a3";
-import { type Section, totalSegments, logicalToPhysical } from "./layout";
+import { type Section, totalSegments, logicalToPhysical, gridWidth, gridDims, visualToLogical } from "./layout";
+import { ANIMATIONS } from "./animations";
 
 export function hexToRgb(hex: string): [number, number, number] {
   return [
@@ -39,7 +40,8 @@ interface State {
   erasing: boolean;
   brightness: number; // 0-100, applied as RGB scaling on push
   effect: number; // a3 header effect byte (0x13 = static; others animate on-device)
-  speed: number; // a3 header speed byte
+  speed: number; // a3 header speed byte (also paces live animations)
+  animationId: string | null; // active live animation (browser-streamed)
   scenes: SavedScene[];
 
   connect: () => Promise<void>;
@@ -66,6 +68,9 @@ interface State {
   fillAll: () => void;
   push: () => Promise<void>;
 
+  startAnimation: (id: string) => void;
+  stopAnimation: () => void;
+
   saveScene: (name: string) => void;
   loadScene: (i: number) => void;
   deleteScene: (i: number) => void;
@@ -76,6 +81,11 @@ interface State {
 // Only one scene push runs at a time; coalesce concurrent requests.
 let pushing = false;
 let pendingPush = false;
+
+// Live-animation loop state (browser-streamed frames).
+let animRunning = false;
+let animFrame = 0;
+const animSleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export const useStore = create<State>()(
   persist(
@@ -100,6 +110,7 @@ export const useStore = create<State>()(
         brightness: 100,
         effect: 0x13,
         speed: 50,
+        animationId: null,
         scenes: [],
 
         connect: async () => {
@@ -185,6 +196,7 @@ export const useStore = create<State>()(
         push: async () => {
           const { device } = get();
           if (!device?.connected) return;
+          if (animRunning) return; // the animation loop is driving the lights
           if (pushing) { pendingPush = true; return; }
           pushing = true;
           set({ busy: true });
@@ -214,6 +226,61 @@ export const useStore = create<State>()(
             pushing = false;
             set({ busy: false });
           }
+        },
+
+        startAnimation: (id) => {
+          set({ animationId: id });
+          if (animRunning) return; // loop already running; it picks up the new id
+          animRunning = true;
+          animFrame = 0;
+          const loop = async () => {
+            while (animRunning) {
+              const st = get();
+              const anim = ANIMATIONS.find((a) => a.id === st.animationId);
+              if (!st.device?.connected || !anim) break;
+
+              const total = totalSegments(st.sections);
+              const width = gridWidth(total, st.rows);
+              const { w, h } = gridDims(width, st.rows, st.transpose);
+              const orient = { transpose: st.transpose, flipH: st.flipH, flipV: st.flipV };
+              const designAt = (vx: number, vy: number) =>
+                st.colors[visualToLogical(vx, vy, width, st.rows, orient)] ?? null;
+              const ctx = { w, h, frame: animFrame, selected: st.selected, designAt };
+
+              const scale = st.brightness / 100;
+              const entries: SegEntry[] = [];
+              for (let vy = 0; vy < h; vy++) {
+                for (let vx = 0; vx < w; vx++) {
+                  const logical = visualToLogical(vx, vy, width, st.rows, orient);
+                  if (logical >= total) continue;
+                  const c = anim.fn(vx, vy, ctx);
+                  if (!c) continue;
+                  const [r, g, b] = hexToRgb(c);
+                  entries.push({
+                    seg: logicalToPhysical(logical, st.sections, st.rows),
+                    r: Math.round(r * scale),
+                    g: Math.round(g * scale),
+                    b: Math.round(b * scale),
+                  });
+                }
+              }
+              try {
+                await st.device.setScene(entries, { dir: 0x13, speed: st.speed });
+              } catch {
+                /* frame dropped; keep going */
+              }
+              animFrame++;
+              const interval = 400 - ((st.speed - 1) / 99) * 350; // speed -> frame gap
+              await animSleep(Math.max(30, interval));
+            }
+            animRunning = false;
+          };
+          void loop();
+        },
+        stopAnimation: () => {
+          animRunning = false;
+          set({ animationId: null });
+          void get().push(); // restore the static design
         },
 
         saveScene: (name) => {

@@ -3,6 +3,7 @@ import { ScenePanel } from "./components/ScenePanel";
 import { ImageImport } from "./components/ImageImport";
 import { Patterns } from "./components/Patterns";
 import { Effects } from "./components/Effects";
+import { LiveAnimate } from "./components/LiveAnimate";
 import { Canvas } from "./components/Canvas";
 import { Sections } from "./components/Sections";
 
@@ -21,6 +22,7 @@ export function App() {
       <ScenePanel />
       <Patterns />
       <Effects />
+      <LiveAnimate />
       <ImageImport />
       <Canvas />
       <Sections />
