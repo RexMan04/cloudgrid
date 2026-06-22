@@ -1,14 +1,13 @@
 import { useStore } from "../store";
 
-// Effect bytes captured from the Govee app's effect buttons (best-guess names;
-// verify by trying each). 0x13 renders your exact per-dot design (static).
+// Effect bytes confirmed on the H703B by observed behavior. 0x13 = static
+// (holds the exact per-dot design); the rest animate on-device and persist.
 const EFFECTS: { label: string; dir: number }[] = [
   { label: "Static", dir: 0x13 },
-  { label: "Cycle", dir: 0x02 },
   { label: "Clockwise", dir: 0x09 },
   { label: "Counter-CW", dir: 0x0a },
-  { label: "Twinkle", dir: 0x0f },
   { label: "Breathe", dir: 0x14 },
+  { label: "Flash", dir: 0x0f },
 ];
 
 export function Effects() {
@@ -28,6 +27,17 @@ export function Effects() {
             {e.label}
           </button>
         ))}
+        <label>try byte</label>
+        <input
+          type="number"
+          min={0}
+          max={255}
+          value={effect}
+          onChange={(e) => useStore.getState().setEffect(Number(e.target.value))}
+          style={{ width: 64 }}
+          title="probe other effect bytes to find more animations (e.g. color cycle / rainbow flow)"
+        />
+        <span className="dim">0x{effect.toString(16).padStart(2, "0")}</span>
       </div>
       <div className="row">
         <label>Speed</label>
