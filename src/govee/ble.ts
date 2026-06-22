@@ -14,6 +14,9 @@ export class GoveeDevice {
   device: BluetoothDevice | null = null;
   private writeChar: BluetoothRemoteGATTCharacteristic | null = null;
   private keepAlive: ReturnType<typeof setInterval> | null = null;
+  // Web Bluetooth allows only one GATT operation at a time; serialize every
+  // write through this chain so keep-alives and scene packets never collide.
+  private chain: Promise<unknown> = Promise.resolve();
   onDisconnect?: () => void;
 
   get connected() {
@@ -60,7 +63,14 @@ export class GoveeDevice {
   }
 
   /** Send one packet from its leading bytes (checksum is appended here). */
-  async send(leading: number[]): Promise<void> {
+  send(leading: number[]): Promise<void> {
+    const run = this.chain.then(() => this.rawWrite(leading));
+    // Keep the chain alive even if one write rejects, so later writes still run.
+    this.chain = run.catch(() => {});
+    return run;
+  }
+
+  private async rawWrite(leading: number[]): Promise<void> {
     if (!this.writeChar) throw new Error("not connected");
     const pkt = buildPacket(leading);
     if (this.writeChar.writeValueWithoutResponse) {

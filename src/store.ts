@@ -36,15 +36,12 @@ interface State {
   push: () => Promise<void>;
 }
 
-let pushTimer: ReturnType<typeof setTimeout> | null = null;
+// Only one scene push runs at a time. If another is requested while one is in
+// flight, coalesce into a single trailing push that re-reads the latest colors.
+let pushing = false;
+let pendingPush = false;
 
 export const useStore = create<State>((set, get) => {
-  const schedulePush = () => {
-    if (!get().connected) return;
-    if (pushTimer) clearTimeout(pushTimer);
-    pushTimer = setTimeout(() => void get().push(), 450); // debounce: BLE is slow
-  };
-
   return {
     device: null,
     connected: false,
@@ -85,37 +82,43 @@ export const useStore = create<State>((set, get) => {
     setColumns: (n) => set({ columns: Math.max(1, Math.min(48, n)) }),
 
     applyCell: (i) => {
+      // Update local state only; the grid pushes once when the gesture ends.
       const colors = get().colors.slice();
       colors[i] = get().erasing ? null : get().selected;
       set({ colors });
-      schedulePush();
     },
     clear: () => {
       set({ colors: Array(get().segCount).fill(null) });
-      schedulePush();
+      void get().push();
     },
     fillAll: () => {
       set({ colors: Array(get().segCount).fill(get().selected) });
-      schedulePush();
+      void get().push();
     },
 
     push: async () => {
-      const { device, colors } = get();
+      const { device } = get();
       if (!device?.connected) return;
-      const entries: SegEntry[] = [];
-      colors.forEach((c, i) => {
-        if (c) {
-          const [r, g, b] = hexToRgb(c);
-          entries.push({ seg: i, r, g, b });
-        }
-      });
+      if (pushing) { pendingPush = true; return; } // coalesce — never overlap scenes
+      pushing = true;
       set({ busy: true });
       try {
-        await device.setScene(entries);
-        set({ status: `pushed ${entries.length} lit segment(s)` });
+        do {
+          pendingPush = false;
+          const entries: SegEntry[] = [];
+          get().colors.forEach((c, i) => {
+            if (c) {
+              const [r, g, b] = hexToRgb(c);
+              entries.push({ seg: i, r, g, b });
+            }
+          });
+          await device.setScene(entries);
+          set({ status: `pushed ${entries.length} lit segment(s)` });
+        } while (pendingPush);
       } catch (e) {
         set({ status: `push failed: ${(e as Error).message}` });
       } finally {
+        pushing = false;
         set({ busy: false });
       }
     },

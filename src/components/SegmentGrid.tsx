@@ -7,9 +7,15 @@ export function SegmentGrid() {
   const applyCell = useStore((s) => s.applyCell);
   const painting = useRef(false);
 
-  // Stop drag-painting when the mouse is released anywhere.
+  // When the gesture ends (anywhere), push exactly one scene for everything
+  // painted during the click/drag.
   useEffect(() => {
-    const up = () => (painting.current = false);
+    const up = () => {
+      if (painting.current) {
+        painting.current = false;
+        void useStore.getState().push();
+      }
+    };
     window.addEventListener("pointerup", up);
     return () => window.removeEventListener("pointerup", up);
   }, []);
