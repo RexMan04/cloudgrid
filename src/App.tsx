@@ -2,6 +2,7 @@ import { Toolbar } from "./components/Toolbar";
 import { ScenePanel } from "./components/ScenePanel";
 import { ImageImport } from "./components/ImageImport";
 import { Patterns } from "./components/Patterns";
+import { Effects } from "./components/Effects";
 import { Canvas } from "./components/Canvas";
 import { Sections } from "./components/Sections";
 
@@ -19,6 +20,7 @@ export function App() {
       <Toolbar />
       <ScenePanel />
       <Patterns />
+      <Effects />
       <ImageImport />
       <Canvas />
       <Sections />

@@ -38,6 +38,8 @@ interface State {
   selected: string;
   erasing: boolean;
   brightness: number; // 0-100, applied as RGB scaling on push
+  effect: number; // a3 header effect byte (0x13 = static; others animate on-device)
+  speed: number; // a3 header speed byte
   scenes: SavedScene[];
 
   connect: () => Promise<void>;
@@ -46,6 +48,8 @@ interface State {
   setErasing: (v: boolean) => void;
   setRows: (n: number) => void;
   setBrightness: (n: number) => void;
+  setEffect: (n: number) => void;
+  setSpeed: (n: number) => void;
   toggleTranspose: () => void;
   toggleFlipH: () => void;
   toggleFlipV: () => void;
@@ -94,6 +98,8 @@ export const useStore = create<State>()(
         selected: "#ff0000",
         erasing: false,
         brightness: 100,
+        effect: 0x13,
+        speed: 50,
         scenes: [],
 
         connect: async () => {
@@ -121,6 +127,14 @@ export const useStore = create<State>()(
         },
         setBrightness: (n) => {
           set({ brightness: Math.max(0, Math.min(100, Math.round(n))) });
+          void get().push();
+        },
+        setEffect: (n) => {
+          set({ effect: n });
+          void get().push();
+        },
+        setSpeed: (n) => {
+          set({ speed: Math.max(1, Math.min(100, Math.round(n))) });
           void get().push();
         },
         toggleTranspose: () => set({ transpose: !get().transpose }), // view-only
@@ -191,7 +205,7 @@ export const useStore = create<State>()(
                   });
                 }
               });
-              await device.setScene(entries);
+              await device.setScene(entries, { dir: get().effect, speed: get().speed });
               set({ status: `pushed ${entries.length} lit segment(s)` });
             } while (pendingPush);
           } catch (e) {
@@ -246,6 +260,8 @@ export const useStore = create<State>()(
         flipV: s.flipV,
         selected: s.selected,
         brightness: s.brightness,
+        effect: s.effect,
+        speed: s.speed,
         scenes: s.scenes,
       }),
       onRehydrateStorage: () => (state) => {
