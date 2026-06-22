@@ -30,7 +30,8 @@ interface State {
   busy: boolean;
 
   sections: Section[];
-  rows: number; // grid height
+  rows: number; // LEDs per run = grid height (un-transposed)
+  transpose: boolean; // flip the editor view so runs show as rows
   colors: (string | null)[];
   selected: string;
   erasing: boolean;
@@ -41,6 +42,7 @@ interface State {
   setSelected: (c: string) => void;
   setErasing: (v: boolean) => void;
   setRows: (n: number) => void;
+  toggleTranspose: () => void;
 
   addSection: () => void;
   removeSection: (i: number) => void;
@@ -79,6 +81,7 @@ export const useStore = create<State>()(
 
         sections: DEFAULT_SECTIONS,
         rows: 11,
+        transpose: false,
         colors: Array(totalSegments(DEFAULT_SECTIONS)).fill(null),
         selected: "#ff0000",
         erasing: false,
@@ -107,6 +110,9 @@ export const useStore = create<State>()(
           set({ rows: Math.max(1, Math.min(45, n || 1)) });
           void get().push();
         },
+        toggleTranspose: () => set({ transpose: !get().transpose }), // view-only
+
+
 
         addSection: () => {
           if (get().sections.length >= 2) return;
@@ -214,6 +220,7 @@ export const useStore = create<State>()(
       partialize: (s) => ({
         sections: s.sections,
         rows: s.rows,
+        transpose: s.transpose,
         selected: s.selected,
         scenes: s.scenes,
       }),

@@ -27,9 +27,13 @@ export function sectionOffsets(sections: Section[]): number[] {
 export const gridWidth = (total: number, rows: number): number =>
   Math.max(1, Math.ceil(total / Math.max(1, rows)));
 
-/** Column-major: grid cell (col, row) -> logical index. */
-export const cellToLogical = (col: number, row: number, rows: number): number =>
-  col * rows + row;
+/** Display dimensions, optionally transposed (runs shown as rows vs columns). */
+export const gridDims = (width: number, rows: number, transpose: boolean) =>
+  transpose ? { w: rows, h: width } : { w: width, h: rows };
+
+/** Map a visual cell (vx, vy) to a logical index, honoring transpose. */
+export const visualToLogical = (vx: number, vy: number, rows: number, transpose: boolean): number =>
+  transpose ? vy * rows + vx : vx * rows + vy;
 
 /** Map a position within a section (logical) to its physical position. */
 export function localPhysical(p: number, s: Section, rows: number): number {
