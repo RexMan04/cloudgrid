@@ -21,7 +21,7 @@ It's working well for my setup. I'm still developing it.
 - Fill / clear / eraser, color swatches + full picker.
 - Configurable segment count and grid columns.
 
-Static scenes only by design — the lights render each design locally, so there's no live animation/framerate. (Animated effects are a planned addition.)
+Static scenes only by design: the lights render each design locally, so there's no live animation/framerate. (Animated effects are a planned addition.)
 
 ## Requirements
 
@@ -38,7 +38,7 @@ bun run dev
 
 Open **http://localhost:5173**, click **Connect device**, pick your light, and start painting.
 
-> On Windows + WSL: run these commands **inside WSL** (the dev server needs the native filesystem), then open `http://localhost:5173` in your Windows browser. Use the `localhost` URL, not the network IP — Web Bluetooth requires a secure context, and `localhost` qualifies.
+> On Windows + WSL: run these commands **inside WSL** (the dev server needs the native filesystem), then open `http://localhost:5173` in your Windows browser. Use the `localhost` URL, not the network IP. Web Bluetooth requires a secure context, and `localhost` qualifies.
 
 ## How it works
 
@@ -54,10 +54,10 @@ split across 20-byte writes (first packet `a3 00`, last `a3 ff`), then a commit 
 
 ## Project layout
 
-- `src/govee/` — protocol: packet builder, a3 scene encoder, Web Bluetooth device wrapper.
-- `src/` — React UI (grid editor, toolbar, Zustand store).
-- `server/` — optional Bun proxy for the Govee Cloud API (whole-house control of non-segment devices).
-- `tools/` — reverse-engineering utilities (BTSnoop decoder, a3 stream reassembler).
+- `src/govee/`: the protocol (packet builder, a3 scene encoder, Web Bluetooth device wrapper).
+- `src/`: the React UI (grid editor, toolbar, Zustand store).
+- `server/`: optional Bun proxy for the Govee Cloud API (whole-house control of non-segment devices).
+- `tools/`: reverse-engineering utilities (BTSnoop decoder, a3 stream reassembler).
 
 ## Roadmap
 
