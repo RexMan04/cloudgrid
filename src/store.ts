@@ -69,6 +69,7 @@ interface State {
   push: () => Promise<void>;
 
   startAnimation: (id: string) => void;
+  playFrames: (frames: (string | null)[][]) => void;
   stopAnimation: () => void;
 
   saveScene: (name: string) => void;
@@ -85,6 +86,9 @@ let pendingPush = false;
 // Live-animation loop state (browser-streamed frames).
 let animRunning = false;
 let animFrame = 0;
+// When set, the loop plays these pre-sampled frames (GIF/video) instead of a
+// generative animation.
+let playbackFrames: (string | null)[][] | null = null;
 const animSleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Serialize whole scenes (animation frames + static pushes) so their packets
@@ -104,6 +108,74 @@ export const useStore = create<State>()(
     (set, get) => {
       const setSections = (sections: Section[]) =>
         set({ sections, colors: resizeColors(get().colors, totalSegments(sections)) });
+
+      // Send one logical-indexed color array as a static scene frame.
+      const sendFrame = async (logicalColors: (string | null)[]) => {
+        const st = get();
+        if (!st.device?.connected) return;
+        const scale = st.brightness / 100;
+        const entries: SegEntry[] = [];
+        logicalColors.forEach((c, p) => {
+          if (c) {
+            const [r, g, b] = hexToRgb(c);
+            entries.push({
+              seg: logicalToPhysical(p, st.sections, st.rows),
+              r: Math.round(r * scale),
+              g: Math.round(g * scale),
+              b: Math.round(b * scale),
+            });
+          }
+        });
+        await queueScene(() => st.device!.setScene(entries, { dir: 0x13, speed: st.speed }));
+      };
+
+      // Compute one frame of a generative animation as logical-indexed colors.
+      const computeAnimColors = (animId: string, frame: number): (string | null)[] | null => {
+        const anim = ANIMATIONS.find((a) => a.id === animId);
+        if (!anim) return null;
+        const st = get();
+        const total = totalSegments(st.sections);
+        const width = gridWidth(total, st.rows);
+        const { w, h } = gridDims(width, st.rows, st.transpose);
+        const orient = { transpose: st.transpose, flipH: st.flipH, flipV: st.flipV };
+        const designAt = (vx: number, vy: number) =>
+          st.colors[visualToLogical(vx, vy, width, st.rows, orient)] ?? null;
+        const ctx = { w, h, frame, selected: st.selected, designAt };
+        const out: (string | null)[] = Array(total).fill(null);
+        for (let vy = 0; vy < h; vy++) {
+          for (let vx = 0; vx < w; vx++) {
+            const logical = visualToLogical(vx, vy, width, st.rows, orient);
+            if (logical >= total) continue;
+            out[logical] = anim.fn(vx, vy, ctx);
+          }
+        }
+        return out;
+      };
+
+      // The single loop that drives both generative animations and frame playback.
+      const runFrameLoop = async () => {
+        while (animRunning) {
+          const st = get();
+          if (!st.device?.connected) break;
+          const logical = playbackFrames
+            ? playbackFrames.length
+              ? playbackFrames[animFrame % playbackFrames.length]
+              : null
+            : st.animationId
+              ? computeAnimColors(st.animationId, animFrame)
+              : null;
+          if (!logical) break;
+          try {
+            await sendFrame(logical);
+          } catch {
+            /* frame dropped; keep going */
+          }
+          animFrame++;
+          const interval = 400 - ((st.speed - 1) / 99) * 350; // speed -> frame gap
+          await animSleep(Math.max(30, interval));
+        }
+        animRunning = false;
+      };
 
       return {
         device: null,
@@ -222,6 +294,7 @@ export const useStore = create<State>()(
           // running live animation rather than being ignored by it.
           if (animRunning) {
             animRunning = false;
+            playbackFrames = null;
             set({ animationId: null });
           }
           if (pushing) { pendingPush = true; return; }
@@ -256,56 +329,27 @@ export const useStore = create<State>()(
         },
 
         startAnimation: (id) => {
+          playbackFrames = null;
           set({ animationId: id });
-          if (animRunning) return; // loop already running; it picks up the new id
-          animRunning = true;
           animFrame = 0;
-          const loop = async () => {
-            while (animRunning) {
-              const st = get();
-              const anim = ANIMATIONS.find((a) => a.id === st.animationId);
-              if (!st.device?.connected || !anim) break;
-
-              const total = totalSegments(st.sections);
-              const width = gridWidth(total, st.rows);
-              const { w, h } = gridDims(width, st.rows, st.transpose);
-              const orient = { transpose: st.transpose, flipH: st.flipH, flipV: st.flipV };
-              const designAt = (vx: number, vy: number) =>
-                st.colors[visualToLogical(vx, vy, width, st.rows, orient)] ?? null;
-              const ctx = { w, h, frame: animFrame, selected: st.selected, designAt };
-
-              const scale = st.brightness / 100;
-              const entries: SegEntry[] = [];
-              for (let vy = 0; vy < h; vy++) {
-                for (let vx = 0; vx < w; vx++) {
-                  const logical = visualToLogical(vx, vy, width, st.rows, orient);
-                  if (logical >= total) continue;
-                  const c = anim.fn(vx, vy, ctx);
-                  if (!c) continue;
-                  const [r, g, b] = hexToRgb(c);
-                  entries.push({
-                    seg: logicalToPhysical(logical, st.sections, st.rows),
-                    r: Math.round(r * scale),
-                    g: Math.round(g * scale),
-                    b: Math.round(b * scale),
-                  });
-                }
-              }
-              try {
-                await queueScene(() => st.device!.setScene(entries, { dir: 0x13, speed: st.speed }));
-              } catch {
-                /* frame dropped; keep going */
-              }
-              animFrame++;
-              const interval = 400 - ((st.speed - 1) / 99) * 350; // speed -> frame gap
-              await animSleep(Math.max(30, interval));
-            }
-            animRunning = false;
-          };
-          void loop();
+          if (!animRunning) {
+            animRunning = true;
+            void runFrameLoop();
+          }
+        },
+        playFrames: (frames) => {
+          if (!frames.length) return;
+          playbackFrames = frames;
+          set({ animationId: "__frames__" });
+          animFrame = 0;
+          if (!animRunning) {
+            animRunning = true;
+            void runFrameLoop();
+          }
         },
         stopAnimation: () => {
           animRunning = false;
+          playbackFrames = null;
           set({ animationId: null });
           void get().push(); // restore the static design
         },
