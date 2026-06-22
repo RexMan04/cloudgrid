@@ -195,7 +195,14 @@ export const useStore = create<State>()(
         },
         clear: () => {
           set({ colors: Array(totalSegments(get().sections)).fill(null) });
-          void get().push();
+          if (animRunning) { animRunning = false; set({ animationId: null }); }
+          // An empty scene + a motion effect doesn't reliably go dark, so send
+          // an explicit whole-strand off.
+          const dev = get().device;
+          if (dev?.connected) {
+            set({ status: "cleared" });
+            void queueScene(() => dev.setAll(0, 0, 0));
+          }
         },
         fillAll: () => {
           set({ colors: Array(totalSegments(get().sections)).fill(get().selected) });
