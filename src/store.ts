@@ -197,16 +197,17 @@ export const useStore = create<State>()(
           void get().push();
         },
         clear: () => {
-          set({ colors: Array(totalSegments(get().sections)).fill(null) });
+          // Reset to a static, empty canvas. Sending an empty STATIC scene
+          // (dir 0x13, black background) switches the device out of any motion
+          // effect so it goes dark instantly instead of breathing/fading to
+          // black. Reset the effect to Static so UI and device agree.
+          set({ colors: Array(totalSegments(get().sections)).fill(null), effect: 0x13 });
           if (animRunning) { animRunning = false; set({ animationId: null }); }
-          // An empty scene + a motion effect doesn't reliably go dark, so send
-          // an explicit whole-strand off. Bump the generation so any queued
-          // scene is skipped and the off goes out as soon as the wire is free.
-          sceneGen++;
+          sceneGen++; // preempt any queued scene
           const dev = get().device;
           if (dev?.connected) {
             set({ status: "cleared" });
-            void queueScene(() => dev.setAll(0, 0, 0));
+            void queueScene(() => dev.setScene([], { dir: 0x13, bg: [0, 0, 0] }));
           }
         },
         fillAll: () => {
