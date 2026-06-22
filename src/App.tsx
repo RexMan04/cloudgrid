@@ -1,5 +1,5 @@
 import { Toolbar } from "./components/Toolbar";
-import { SegmentGrid } from "./components/SegmentGrid";
+import { Sections } from "./components/Sections";
 
 export function App() {
   return (
@@ -13,7 +13,7 @@ export function App() {
       </header>
 
       <Toolbar />
-      <SegmentGrid />
+      <Sections />
 
       <footer className="dim">
         Static scenes only — the lights render each design locally, so there is no live

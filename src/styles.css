@@ -79,3 +79,13 @@ input[type="number"] { font: inherit; background: var(--bg); color: var(--text);
   color: rgba(255, 255, 255, 0.35);
   pointer-events: none;
 }
+
+.sections { display: flex; flex-direction: column; gap: 14px; }
+.section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.section-head { margin-bottom: 10px; }
+.section-head strong { margin-right: 4px; }

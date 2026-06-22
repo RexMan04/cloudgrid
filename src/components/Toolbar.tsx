@@ -52,12 +52,10 @@ export function Toolbar() {
       </div>
 
       <div className="row dim">
-        <label>Segments</label>
-        <input type="number" min={1} max={264} value={s.segCount}
-          onChange={(e) => s.setSegCount(Number(e.target.value))} style={{ width: 70 }} />
-        <label>Columns</label>
+        <label>Grid columns</label>
         <input type="number" min={1} max={48} value={s.columns}
           onChange={(e) => s.setColumns(Number(e.target.value))} style={{ width: 60 }} />
+        <span>(how each section wraps on screen)</span>
       </div>
     </div>
   );
