@@ -12,7 +12,7 @@ export function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
-const newSection = (): Section => ({ length: 44, reversed: false, serpentine: false, runLength: 11 });
+const newSection = (): Section => ({ length: 44, reversed: false, serpentine: false });
 const DEFAULT_SECTIONS: Section[] = [newSection(), newSection()];
 
 const resizeColors = (prev: (string | null)[], total: number): (string | null)[] =>
@@ -30,7 +30,7 @@ interface State {
   busy: boolean;
 
   sections: Section[];
-  columns: number;
+  rows: number; // grid height
   colors: (string | null)[];
   selected: string;
   erasing: boolean;
@@ -40,16 +40,16 @@ interface State {
   disconnect: () => void;
   setSelected: (c: string) => void;
   setErasing: (v: boolean) => void;
-  setColumns: (n: number) => void;
+  setRows: (n: number) => void;
 
   addSection: () => void;
   removeSection: (i: number) => void;
   setSectionLength: (i: number, len: number) => void;
   toggleReverse: (i: number) => void;
   toggleSerpentine: (i: number) => void;
-  setRunLength: (i: number, n: number) => void;
 
   applyCell: (logicalIndex: number) => void;
+  applyDesign: (colors: (string | null)[]) => void;
   clear: () => void;
   fillAll: () => void;
   push: () => Promise<void>;
@@ -78,7 +78,7 @@ export const useStore = create<State>()(
         busy: false,
 
         sections: DEFAULT_SECTIONS,
-        columns: 11,
+        rows: 11,
         colors: Array(totalSegments(DEFAULT_SECTIONS)).fill(null),
         selected: "#ff0000",
         erasing: false,
@@ -103,7 +103,10 @@ export const useStore = create<State>()(
 
         setSelected: (c) => set({ selected: c, erasing: false }),
         setErasing: (v) => set({ erasing: v }),
-        setColumns: (n) => set({ columns: Math.max(1, Math.min(48, n)) }),
+        setRows: (n) => {
+          set({ rows: Math.max(1, Math.min(45, n || 1)) });
+          void get().push();
+        },
 
         addSection: () => {
           if (get().sections.length >= 2) return;
@@ -125,16 +128,15 @@ export const useStore = create<State>()(
           set({ sections: get().sections.map((s, idx) => (idx === i ? { ...s, serpentine: !s.serpentine } : s)) });
           void get().push();
         },
-        setRunLength: (i, n) => {
-          const clamped = Math.max(1, Math.min(45, n || 1));
-          set({ sections: get().sections.map((s, idx) => (idx === i ? { ...s, runLength: clamped } : s)) });
-          void get().push();
-        },
 
         applyCell: (logicalIndex) => {
           const colors = get().colors.slice();
           colors[logicalIndex] = get().erasing ? null : get().selected;
           set({ colors });
+        },
+        applyDesign: (next) => {
+          set({ colors: resizeColors(next, totalSegments(get().sections)) });
+          void get().push();
         },
         clear: () => {
           set({ colors: Array(totalSegments(get().sections)).fill(null) });
@@ -154,12 +156,12 @@ export const useStore = create<State>()(
           try {
             do {
               pendingPush = false;
-              const { colors, sections } = get();
+              const { colors, sections, rows } = get();
               const entries: SegEntry[] = [];
               colors.forEach((c, p) => {
                 if (c) {
                   const [r, g, b] = hexToRgb(c);
-                  entries.push({ seg: logicalToPhysical(p, sections), r, g, b });
+                  entries.push({ seg: logicalToPhysical(p, sections, rows), r, g, b });
                 }
               });
               await device.setScene(entries);
@@ -175,9 +177,7 @@ export const useStore = create<State>()(
 
         saveScene: (name) => {
           const scene: SavedScene = { name, colors: [...get().colors] };
-          // Replace a scene with the same name, else append.
-          const scenes = get().scenes.filter((s) => s.name !== name);
-          set({ scenes: [...scenes, scene] });
+          set({ scenes: [...get().scenes.filter((s) => s.name !== name), scene] });
         },
         loadScene: (i) => {
           const scene = get().scenes[i];
@@ -211,14 +211,12 @@ export const useStore = create<State>()(
     },
     {
       name: "cloudgrid",
-      // Persist only install config + design library (never the live BLE handle).
       partialize: (s) => ({
         sections: s.sections,
-        columns: s.columns,
+        rows: s.rows,
         selected: s.selected,
         scenes: s.scenes,
       }),
-      // colors isn't persisted; size the blank canvas to the restored sections.
       onRehydrateStorage: () => (state) => {
         if (state) state.colors = Array(totalSegments(state.sections)).fill(null);
       },

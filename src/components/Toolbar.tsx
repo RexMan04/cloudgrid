@@ -51,12 +51,6 @@ export function Toolbar() {
         </button>
       </div>
 
-      <div className="row dim">
-        <label>Grid columns</label>
-        <input type="number" min={1} max={48} value={s.columns}
-          onChange={(e) => s.setColumns(Number(e.target.value))} style={{ width: 60 }} />
-        <span>(how each section wraps on screen)</span>
-      </div>
     </div>
   );
 }
