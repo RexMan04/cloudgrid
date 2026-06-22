@@ -6,6 +6,8 @@ export function Sections() {
   const sections = useStore((s) => s.sections);
   const rows = useStore((s) => s.rows);
   const transpose = useStore((s) => s.transpose);
+  const flipH = useStore((s) => s.flipH);
+  const flipV = useStore((s) => s.flipV);
 
   const total = totalSegments(sections);
   const width = gridWidth(total, rows);
@@ -24,8 +26,15 @@ export function Sections() {
           onChange={(e) => useStore.getState().setRows(Number(e.target.value))}
           style={{ width: 64 }}
         />
+        <label>orient</label>
         <button className={transpose ? "active" : ""} onClick={() => useStore.getState().toggleTranspose()}>
           Transpose
+        </button>
+        <button className={flipH ? "active" : ""} onClick={() => useStore.getState().toggleFlipH()}>
+          Flip ↔
+        </button>
+        <button className={flipV ? "active" : ""} onClick={() => useStore.getState().toggleFlipV()}>
+          Flip ↕
         </button>
         <button onClick={() => useStore.getState().addSection()} disabled={sections.length >= 2}>
           + Add section
@@ -34,8 +43,9 @@ export function Sections() {
         <span className="dim">({total} segments)</span>
       </div>
       <div className="row dim">
-        “Run length” is the LEDs in each snake run (your calibrated value). The grid width comes
-        from your total segments. Transpose flips the view if runs read as rows on your ceiling.
+        Calibrate orientation: paint the <strong>&nbsp;top-left&nbsp;</strong> cell, see which physical
+        LED lights, then toggle Transpose / Flip ↔ / Flip ↕ until the on-screen top-left matches your
+        back-left corner (top = back wall, left = left wall). “Run length” is the LEDs per snake run.
       </div>
 
       {sections.map((sec, si) => (

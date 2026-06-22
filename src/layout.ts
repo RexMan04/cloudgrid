@@ -31,9 +31,25 @@ export const gridWidth = (total: number, rows: number): number =>
 export const gridDims = (width: number, rows: number, transpose: boolean) =>
   transpose ? { w: rows, h: width } : { w: width, h: rows };
 
-/** Map a visual cell (vx, vy) to a logical index, honoring transpose. */
-export const visualToLogical = (vx: number, vy: number, rows: number, transpose: boolean): number =>
-  transpose ? vy * rows + vx : vx * rows + vy;
+export interface Orient {
+  transpose: boolean;
+  flipH: boolean;
+  flipV: boolean;
+}
+
+/**
+ * Map a visual cell (vx, vy) to a logical index. transpose/flipH/flipV together
+ * cover all 8 orientations so the on-screen grid can be aligned to the physical
+ * ceiling (which edge is the back wall, which side is the left wall).
+ */
+export function visualToLogical(vx: number, vy: number, width: number, rows: number, o: Orient): number {
+  const { w, h } = gridDims(width, rows, o.transpose);
+  const x = o.flipH ? w - 1 - vx : vx;
+  const y = o.flipV ? h - 1 - vy : vy;
+  const col = o.transpose ? y : x;
+  const row = o.transpose ? x : y;
+  return col * rows + row;
+}
 
 /** Map a position within a section (logical) to its physical position. */
 export function localPhysical(p: number, s: Section, rows: number): number {

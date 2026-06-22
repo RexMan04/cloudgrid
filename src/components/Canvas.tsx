@@ -7,6 +7,8 @@ export function Canvas() {
   const sections = useStore((s) => s.sections);
   const rows = useStore((s) => s.rows);
   const transpose = useStore((s) => s.transpose);
+  const flipH = useStore((s) => s.flipH);
+  const flipV = useStore((s) => s.flipV);
   const applyCell = useStore((s) => s.applyCell);
   const painting = useRef(false);
 
@@ -29,7 +31,7 @@ export function Canvas() {
   for (let k = 0; k < w * h; k++) {
     const vy = Math.floor(k / w);
     const vx = k % w;
-    const logical = visualToLogical(vx, vy, rows, transpose);
+    const logical = visualToLogical(vx, vy, width, rows, { transpose, flipH, flipV });
     const exists = logical < total;
     const c = exists ? colors[logical] : null;
     const banded = exists && sectionOfLogical(logical, sections) % 2 === 1;

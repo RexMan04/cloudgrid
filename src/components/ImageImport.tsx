@@ -17,7 +17,7 @@ function rotate90(img: CanvasImageSource, w: number, h: number): HTMLCanvasEleme
 }
 
 function sample(img: HTMLImageElement, fit: Fit, rotate: boolean) {
-  const { sections, rows, transpose } = useStore.getState();
+  const { sections, rows, transpose, flipH, flipV } = useStore.getState();
   const total = totalSegments(sections);
   const width = gridWidth(total, rows);
   const { w, h } = gridDims(width, rows, transpose); // display dimensions
@@ -47,7 +47,7 @@ function sample(img: HTMLImageElement, fit: Fit, rotate: boolean) {
   const colors: (string | null)[] = Array(total).fill(null);
   for (let vy = 0; vy < h; vy++) {
     for (let vx = 0; vx < w; vx++) {
-      const logical = visualToLogical(vx, vy, rows, transpose);
+      const logical = visualToLogical(vx, vy, width, rows, { transpose, flipH, flipV });
       if (logical >= total) continue;
       const i = (vy * w + vx) * 4;
       if (data[i + 3] < 16) continue; // transparent / letterbox -> off

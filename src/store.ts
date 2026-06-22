@@ -31,7 +31,9 @@ interface State {
 
   sections: Section[];
   rows: number; // LEDs per run = grid height (un-transposed)
-  transpose: boolean; // flip the editor view so runs show as rows
+  transpose: boolean; // swap the editor view axes (runs show as rows)
+  flipH: boolean; // mirror the view left/right
+  flipV: boolean; // mirror the view top/bottom
   colors: (string | null)[];
   selected: string;
   erasing: boolean;
@@ -43,6 +45,8 @@ interface State {
   setErasing: (v: boolean) => void;
   setRows: (n: number) => void;
   toggleTranspose: () => void;
+  toggleFlipH: () => void;
+  toggleFlipV: () => void;
 
   addSection: () => void;
   removeSection: (i: number) => void;
@@ -82,6 +86,8 @@ export const useStore = create<State>()(
         sections: DEFAULT_SECTIONS,
         rows: 11,
         transpose: false,
+        flipH: false,
+        flipV: false,
         colors: Array(totalSegments(DEFAULT_SECTIONS)).fill(null),
         selected: "#ff0000",
         erasing: false,
@@ -111,6 +117,8 @@ export const useStore = create<State>()(
           void get().push();
         },
         toggleTranspose: () => set({ transpose: !get().transpose }), // view-only
+        toggleFlipH: () => set({ flipH: !get().flipH }),
+        toggleFlipV: () => set({ flipV: !get().flipV }),
 
 
 
@@ -221,6 +229,8 @@ export const useStore = create<State>()(
         sections: s.sections,
         rows: s.rows,
         transpose: s.transpose,
+        flipH: s.flipH,
+        flipV: s.flipV,
         selected: s.selected,
         scenes: s.scenes,
       }),
