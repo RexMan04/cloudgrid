@@ -2,11 +2,17 @@
 
 Design and control **Govee RGBIC dot lights** per-segment, straight from your browser over Bluetooth. No app, no cloud account, no API key.
 
-Built for a cloud-ceiling installation (a grid of Govee dots), but works on any supported RGBIC strand.
+Built to turn a Govee dot-string kit into a designable grid. Mine is a light-cloud on my basement ceiling.
 
-## Why this exists
+## Why I built this
 
-Govee's public Cloud API can only set a Govee dot string to **one color at a time** — it doesn't expose per-segment control for the H703B. So CloudGrid talks to the lights **locally over Bluetooth (Web Bluetooth)** using the device's own DIY-scene protocol, which was reverse-engineered from a Bluetooth packet capture. That gives full per-dot control, the same as the official app, with none of its limits.
+I grabbed a Govee dot-string kit on a Black Friday deal a while back, 270 lights, basically for free, and I wanted to actually do something with them instead of stringing them on the house. So I decided to build a grid on my basement ceiling, a little cloud of lights.
+
+The problem is the Govee app has no real grid editor. There's no good way to design per-dot patterns or drop in an image and have it show up on the lights. These are string lights, so the app treats them as a strand, not a canvas. And the public Govee Cloud API only lets you set the whole strand to one color; it doesn't expose per-segment control for the H703B at all.
+
+So I reverse-engineered the device's Bluetooth protocol from packet captures and built CloudGrid: a grid-based pattern maker that talks to the lights locally over Web Bluetooth, gives full per-dot control (the same as the app, without its limits), and lets me calibrate the physical layout (reversing sections and handling snake/zigzag wiring) so a clean design on screen maps correctly onto however the strip is actually mounted.
+
+It's working well for my setup. I'm still developing it.
 
 ## Features
 
@@ -21,7 +27,7 @@ Static scenes only by design — the lights render each design locally, so there
 
 - [Bun](https://bun.sh)
 - A Chromium browser with Web Bluetooth: **Chrome or Edge** out of the box, or **Brave** with `brave://flags/#brave-web-bluetooth-api` enabled.
-- A Govee RGBIC device that supports DIY scenes (developed against the **H703B**).
+- A Govee **H703B** dot-string light. That's the only device I've built and tested against. Other Govee RGBIC devices that use the same DIY-scene Bluetooth protocol may work, but I haven't tried them yet (adapting to more devices is a possible future step).
 
 ## Run
 
