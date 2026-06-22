@@ -89,3 +89,23 @@ input[type="number"] { font: inherit; background: var(--bg); color: var(--text);
 }
 .section-head { margin-bottom: 10px; }
 .section-head strong { margin-right: 4px; }
+
+.scene-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.scene {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.scene-name { font-weight: 600; }
+input[type="text"] {
+  font: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}

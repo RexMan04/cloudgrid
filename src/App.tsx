@@ -1,4 +1,5 @@
 import { Toolbar } from "./components/Toolbar";
+import { ScenePanel } from "./components/ScenePanel";
 import { Sections } from "./components/Sections";
 
 export function App() {
@@ -13,6 +14,7 @@ export function App() {
       </header>
 
       <Toolbar />
+      <ScenePanel />
       <Sections />
 
       <footer className="dim">
