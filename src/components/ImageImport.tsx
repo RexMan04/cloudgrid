@@ -16,7 +16,13 @@ function rotate90(img: CanvasImageSource, w: number, h: number): HTMLCanvasEleme
   return c;
 }
 
-function sample(img: HTMLImageElement, fit: Fit, rotate: boolean) {
+interface Adjust {
+  sat: number;
+  bright: number;
+  contrast: number;
+}
+
+function sample(img: HTMLImageElement, fit: Fit, rotate: boolean, adj: Adjust) {
   const { sections, rows, transpose, flipH, flipV } = useStore.getState();
   const total = totalSegments(sections);
   const width = gridWidth(total, rows);
@@ -34,6 +40,8 @@ function sample(img: HTMLImageElement, fit: Fit, rotate: boolean) {
   cv.width = w;
   cv.height = h;
   const ctx = cv.getContext("2d")!;
+  // Punch up colors for LEDs (saturation/brightness/contrast) before sampling.
+  ctx.filter = `saturate(${adj.sat}%) brightness(${adj.bright}%) contrast(${adj.contrast}%)`;
   if (fit === "stretch") {
     ctx.drawImage(src, 0, 0, w, h);
   } else {
@@ -67,13 +75,21 @@ export function ImageImport() {
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [fit, setFit] = useState<Fit>("contain");
   const [rotate, setRotate] = useState(false);
+  const [sat, setSat] = useState(100);
+  const [bright, setBright] = useState(100);
+  const [contrast, setContrast] = useState(100);
 
   const width = gridWidth(totalSegments(sections), rows);
   const { w, h } = gridDims(width, rows, transpose);
   const orient = w > h ? "landscape (wide)" : w < h ? "portrait (tall)" : "square";
 
-  const resample = (f = fit, r = rotate) => {
-    if (imgRef.current) sample(imgRef.current, f, r);
+  const resample = (over: Partial<{ f: Fit; r: boolean; sat: number; bright: number; contrast: number }> = {}) => {
+    if (!imgRef.current) return;
+    sample(imgRef.current, over.f ?? fit, over.r ?? rotate, {
+      sat: over.sat ?? sat,
+      bright: over.bright ?? bright,
+      contrast: over.contrast ?? contrast,
+    });
   };
 
   return (
@@ -111,7 +127,7 @@ export function ImageImport() {
             className={fit === f ? "active" : ""}
             onClick={() => {
               setFit(f);
-              resample(f, rotate);
+              resample({ f });
             }}
           >
             {f}
@@ -122,11 +138,26 @@ export function ImageImport() {
           onClick={() => {
             const r = !rotate;
             setRotate(r);
-            resample(fit, r);
+            resample({ r });
           }}
         >
           Rotate 90°
         </button>
+      </div>
+
+      <div className="row">
+        <label>Saturation</label>
+        <input type="range" min={0} max={300} value={sat}
+          onChange={(e) => { const v = Number(e.target.value); setSat(v); resample({ sat: v }); }} />
+        <span className="dim">{sat}%</span>
+        <label>Brightness</label>
+        <input type="range" min={0} max={200} value={bright}
+          onChange={(e) => { const v = Number(e.target.value); setBright(v); resample({ bright: v }); }} />
+        <span className="dim">{bright}%</span>
+        <label>Contrast</label>
+        <input type="range" min={0} max={300} value={contrast}
+          onChange={(e) => { const v = Number(e.target.value); setContrast(v); resample({ contrast: v }); }} />
+        <span className="dim">{contrast}%</span>
       </div>
 
       <div className="row dim">

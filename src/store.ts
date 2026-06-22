@@ -37,6 +37,7 @@ interface State {
   colors: (string | null)[];
   selected: string;
   erasing: boolean;
+  brightness: number; // 0-100, applied as RGB scaling on push
   scenes: SavedScene[];
 
   connect: () => Promise<void>;
@@ -44,6 +45,7 @@ interface State {
   setSelected: (c: string) => void;
   setErasing: (v: boolean) => void;
   setRows: (n: number) => void;
+  setBrightness: (n: number) => void;
   toggleTranspose: () => void;
   toggleFlipH: () => void;
   toggleFlipV: () => void;
@@ -91,6 +93,7 @@ export const useStore = create<State>()(
         colors: Array(totalSegments(DEFAULT_SECTIONS)).fill(null),
         selected: "#ff0000",
         erasing: false,
+        brightness: 100,
         scenes: [],
 
         connect: async () => {
@@ -114,6 +117,10 @@ export const useStore = create<State>()(
         setErasing: (v) => set({ erasing: v }),
         setRows: (n) => {
           set({ rows: Math.max(1, Math.min(45, n || 1)) });
+          void get().push();
+        },
+        setBrightness: (n) => {
+          set({ brightness: Math.max(0, Math.min(100, Math.round(n))) });
           void get().push();
         },
         toggleTranspose: () => set({ transpose: !get().transpose }), // view-only
@@ -170,12 +177,18 @@ export const useStore = create<State>()(
           try {
             do {
               pendingPush = false;
-              const { colors, sections, rows } = get();
+              const { colors, sections, rows, brightness } = get();
+              const scale = brightness / 100;
               const entries: SegEntry[] = [];
               colors.forEach((c, p) => {
                 if (c) {
                   const [r, g, b] = hexToRgb(c);
-                  entries.push({ seg: logicalToPhysical(p, sections, rows), r, g, b });
+                  entries.push({
+                    seg: logicalToPhysical(p, sections, rows),
+                    r: Math.round(r * scale),
+                    g: Math.round(g * scale),
+                    b: Math.round(b * scale),
+                  });
                 }
               });
               await device.setScene(entries);
@@ -232,6 +245,7 @@ export const useStore = create<State>()(
         flipH: s.flipH,
         flipV: s.flipV,
         selected: s.selected,
+        brightness: s.brightness,
         scenes: s.scenes,
       }),
       onRehydrateStorage: () => (state) => {

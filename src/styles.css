@@ -51,6 +51,7 @@ button.primary { background: var(--accent); border-color: #3fb950; color: #fff; 
 button.active { outline: 2px solid #58a6ff; }
 
 input[type="color"] { width: 42px; height: 32px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; }
+input[type="range"] { accent-color: #58a6ff; }
 input[type="number"] { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; }
 
 .status { color: var(--muted); }

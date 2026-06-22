@@ -51,6 +51,18 @@ export function Toolbar() {
         </button>
       </div>
 
+      <div className="row">
+        <label>Brightness</label>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={s.brightness}
+          onChange={(e) => s.setBrightness(Number(e.target.value))}
+          style={{ width: 220 }}
+        />
+        <span className="dim">{s.brightness}%</span>
+      </div>
     </div>
   );
 }
