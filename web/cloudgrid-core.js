@@ -22,7 +22,11 @@
   function buildSceneLeadings(entries, opts) {
     opts = opts || {};
     const dir = opts.dir != null ? opts.dir : 0x13;
-    const speed = opts.speed != null ? opts.speed : 0x32;
+    // dir 0x13 is the static/hold scene. The firmware still slowly "flows" a
+    // DIY scene at the header's speed, so force speed 0 for static designs (and
+    // for live-animation frames, which are static scenes the browser swaps) to
+    // keep them frozen. Motion effects (other dir bytes) keep their speed.
+    const speed = dir === 0x13 ? 0 : opts.speed != null ? opts.speed : 0x32;
     const bright = opts.bright != null ? opts.bright : 0x64;
     const bg = opts.bg || [1, 1, 1];
 

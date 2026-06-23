@@ -151,7 +151,8 @@
               <button onClick="{{ mFill }}" style="{{ btnGhost }}">Fill all</button>
               <button onClick="{{ mClear }}" style="{{ btnGhost }}">Clear</button>
             </div>
-            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Click or drag across the grid to paint. Right-click a cell for quick actions. Changes push to the lights on release.</div>
+            <div style="{{ sliderRow }}"><span style="{{ sliderLab }}">Brightness</span><input type="range" min="0" max="100" value="{{ brushBright }}" onInput="{{ onBrushBright }}" style="flex:1;" /><span style="{{ sliderVal }}">{{ brushBright }}%</span></div>
+            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Click or drag to paint at the brush brightness. Right-click a cell for quick actions, including its own brightness. Changes push to the lights on release.</div>
           </div>
           </div>
         </sc-if>
@@ -310,45 +311,6 @@
         </sc-if>
         </div>
 
-        <!-- CALIBRATE -->
-        <div style="{{ secWrap }}">
-          <button onClick="{{ tCalibrate }}" style="{{ headCalibrate }}"><span style="{{ chevCalibrate }}">›</span><span style="flex:1; text-align:left;">Calibrate</span></button>
-          <sc-if value="{{ expanded.calibrate }}" hint-placeholder-val="{{ false }}">
-          <div style="{{ secBody }}">
-          <div style="{{ cardStyle }}">
-            <div style="{{ cardHead }}">Orientation</div>
-            <div style="{{ sliderRow }}">
-              <span style="{{ sliderLab }}">Run length</span>
-              <input type="number" min="1" max="45" value="{{ rows }}" onChange="{{ onRows }}" style="{{ numInput }}" />
-              <span style="font-size:11.5px; color:#6c7686;">LEDs / run</span>
-            </div>
-            <div style="display:flex; flex-wrap:wrap; gap:6px;">
-              <button onClick="{{ mTranspose }}" style="{{ transposeBtn }}">Transpose</button>
-              <button onClick="{{ mFlipH }}" style="{{ flipHBtn }}">Flip ↔</button>
-              <button onClick="{{ mFlipV }}" style="{{ flipVBtn }}">Flip ↕</button>
-            </div>
-            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner.</div>
-          </div>
-          <div style="{{ cardStyle }}">
-            <div style="display:flex; align-items:center; justify-content:space-between;">
-              <div style="{{ cardHead }}">Sections</div>
-              <button onClick="{{ addSection }}" style="{{ addBtn }}">+ Add</button>
-            </div>
-            <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="2">
-              <div style="display:flex; flex-wrap:wrap; align-items:center; gap:7px; background:#0e1116; border:1px solid #232932; border-radius:7px; padding:8px 9px;">
-                <span style="font-weight:600; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#8b94a3; margin-right:2px;">S{{ sec.num }}</span>
-                <input type="number" min="1" max="45" value="{{ sec.length }}" onChange="{{ sec.onLen }}" style="{{ numInputSm }}" />
-                <button onClick="{{ sec.onReverse }}" style="{{ sec.revStyle }}">Reverse</button>
-                <button onClick="{{ sec.onSnake }}" style="{{ sec.snakeStyle }}">Snake</button>
-                <sc-if value="{{ sec.canRemove }}" hint-placeholder-val="{{ false }}">
-                  <button onClick="{{ sec.onRemove }}" style="{{ chipBtnX }}">✕</button>
-                </sc-if>
-              </div>
-            </sc-for>
-          </div>
-          </div>
-        </sc-if>
-        </div>
       </div>
     </div>
 
@@ -425,8 +387,39 @@
         <div style="{{ statRow }}"><span style="{{ statLab }}">Lit segments</span><span style="{{ statVal }}">{{ litCount }}</span></div>
         <div style="{{ statRow }}"><span style="{{ statLab }}">Grid</span><span style="{{ statVal }}">{{ gridW }} × {{ gridH }}</span></div>
         <div style="{{ statRow }}"><span style="{{ statLab }}">Total segments</span><span style="{{ statVal }}">{{ total }}</span></div>
-        <div style="{{ statRow }}"><span style="{{ statLab }}">Sections</span><span style="{{ statVal }}">{{ sceneSectionCount }}</span></div>
-        <div style="{{ statRow }}"><span style="{{ statLab }}">Run length</span><span style="{{ statVal }}">{{ rows }}</span></div>
+      </div>
+
+      <div style="{{ cardStyle }}">
+        <div style="{{ cardHead }}">Calibrate · orientation</div>
+        <div style="{{ sliderRow }}">
+          <span style="{{ sliderLab }}">Run length</span>
+          <input type="number" min="1" max="45" value="{{ rows }}" onChange="{{ onRows }}" style="{{ numInput }}" />
+          <span style="font-size:11.5px; color:#6c7686;">LEDs / run</span>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <button onClick="{{ mTranspose }}" style="{{ transposeBtn }}">Transpose</button>
+          <button onClick="{{ mFlipH }}" style="{{ flipHBtn }}">Flip ↔</button>
+          <button onClick="{{ mFlipV }}" style="{{ flipVBtn }}">Flip ↕</button>
+        </div>
+        <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner.</div>
+      </div>
+
+      <div style="{{ cardStyle }}">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div style="{{ cardHead }}">Sections</div>
+          <button onClick="{{ addSection }}" style="{{ addBtn }}">+ Add</button>
+        </div>
+        <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="2">
+          <div style="display:flex; flex-wrap:wrap; align-items:center; gap:7px; background:#0e1116; border:1px solid #232932; border-radius:7px; padding:8px 9px;">
+            <span style="font-weight:600; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#8b94a3; margin-right:2px;">S{{ sec.num }}</span>
+            <input type="number" min="1" max="45" value="{{ sec.length }}" onChange="{{ sec.onLen }}" style="{{ numInputSm }}" />
+            <button onClick="{{ sec.onReverse }}" style="{{ sec.revStyle }}">Reverse</button>
+            <button onClick="{{ sec.onSnake }}" style="{{ sec.snakeStyle }}">Snake</button>
+            <sc-if value="{{ sec.canRemove }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ sec.onRemove }}" style="{{ chipBtnX }}">✕</button>
+            </sc-if>
+          </div>
+        </sc-for>
       </div>
     </div>
   </div>
@@ -447,6 +440,13 @@
       <button onClick="{{ ctxErase }}" style="{{ dropItem }}"><span>Erase cell</span></button>
       <button onClick="{{ ctxEyedrop }}" style="{{ dropItem }}"><span>Pick color from cell</span></button>
       <div style="height:1px; background:#262b33; margin:5px 0;"></div>
+      <div style="padding:2px 9px 4px; font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#6c7686;">Cell brightness</div>
+      <div style="display:flex; gap:5px; padding:0 9px 4px;">
+        <sc-for list="{{ ctxBrights }}" as="cb" hint-placeholder-count="4">
+          <button onClick="{{ cb.onClick }}" style="{{ chipBtn }}">{{ cb.label }}</button>
+        </sc-for>
+      </div>
+      <div style="height:1px; background:#262b33; margin:5px 0;"></div>
       <button onClick="{{ ctxFillSection }}" style="{{ dropItem }}"><span>Fill section</span></button>
       <button onClick="{{ ctxClearSection }}" style="{{ dropItem }}"><span>Clear section</span></button>
     </div>
@@ -466,9 +466,10 @@ class Component extends DCLogic {
       connected: false, status: "Not connected", busy: false, powered: true,
       sections, rows: 11, transpose: false, flipH: false, flipV: false,
       colors: new Array(this.totalSegments(sections)).fill(null),
+      bright: new Array(this.totalSegments(sections)).fill(100),
       previewColors: null,
       selected: "#ff0000", erasing: false,
-      brightness: 100, effect: 0x13, speed: 50,
+      brushBright: 100, brightness: 100, effect: 0x13, speed: 50,
       animationId: null, scenes: [],
       // ui
       layout: "studio", tool: "paint", openMenu: null, showIndices: false,
@@ -530,7 +531,9 @@ class Component extends DCLogic {
         ["sections", "rows", "transpose", "flipH", "flipV", "selected", "brightness", "effect", "speed", "scenes"].forEach((k) => {
           if (p[k] != null) patch[k] = p[k];
         });
-        patch.colors = new Array(this.totalSegments(patch.sections || this.state.sections)).fill(null);
+        const t0 = this.totalSegments(patch.sections || this.state.sections);
+        patch.colors = new Array(t0).fill(null);
+        patch.bright = new Array(t0).fill(100);
         this.setState(patch);
       }
     } catch (e) {}
@@ -637,13 +640,15 @@ class Component extends DCLogic {
     this.sceneChain = run.catch(() => {});
     return run;
   }
-  buildEntries(colors) {
+  buildEntries(colors, bright) {
     const scale = this.state.brightness / 100;
     const entries = [];
     colors.forEach((c, p) => {
       if (c) {
         const [r, g, b] = this.hexToRgb(c);
-        entries.push({ seg: this.logicalToPhysical(p, this.state.sections, this.state.rows), r: Math.round(r * scale), g: Math.round(g * scale), b: Math.round(b * scale) });
+        const cb = bright && bright[p] != null ? bright[p] / 100 : 1;
+        const s = scale * cb;
+        entries.push({ seg: this.logicalToPhysical(p, this.state.sections, this.state.rows), r: Math.round(r * s), g: Math.round(g * s), b: Math.round(b * s) });
       }
     });
     return entries;
@@ -661,7 +666,7 @@ class Component extends DCLogic {
     try {
       do {
         this.pendingPush = false;
-        const entries = this.buildEntries(this.state.colors);
+        const entries = this.buildEntries(this.state.colors, this.state.bright);
         await this.queueScene(() => this.device.setScene(entries, { dir: this.state.effect, speed: this.state.speed }));
         this.setState({ status: "Pushed " + entries.length + " lit segment(s)" });
       } while (this.pendingPush);
@@ -703,10 +708,13 @@ class Component extends DCLogic {
   setSections(sections) {
     const total = this.totalSegments(sections);
     const colors = Array.from({ length: total }, (_, i) => this.state.colors[i] != null ? this.state.colors[i] : null);
-    this.setState({ sections, colors }, this._persist);
+    const bright = Array.from({ length: total }, (_, i) => this.state.bright[i] != null ? this.state.bright[i] : 100);
+    this.setState({ sections, colors, bright }, this._persist);
   }
   setRows(n) { this.setState({ rows: Math.max(1, Math.min(45, n || 1)) }, () => { this._persist(); this.push(); }); }
   setBrightness(n) { this.setState({ brightness: Math.max(0, Math.min(100, Math.round(n))) }, () => { this._persist(); this.push(); }); }
+  setBrushBright(n) { this.setState({ brushBright: Math.max(0, Math.min(100, Math.round(n))) }); }
+  setCellBright(logical, v) { const bright = this.state.bright.slice(); bright[logical] = Math.max(0, Math.min(100, v)); this.setState({ bright }); }
   setEffect(n) { this.setState({ effect: n }, () => { this._persist(); this.push(); }); }
   setSpeed(n) { this.setState({ speed: Math.max(1, Math.min(100, Math.round(n))) }, () => { this._persist(); this.push(); }); }
   toggleTranspose() { this.setState({ transpose: !this.state.transpose }, this._persist); }
@@ -719,15 +727,22 @@ class Component extends DCLogic {
   toggleReverse(i) { this.setState({ sections: this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { reversed: !s.reversed }) : s) }, () => { this._persist(); this.push(); }); }
   toggleSerpentine(i) { this.setState({ sections: this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { serpentine: !s.serpentine }) : s) }, () => { this._persist(); this.push(); }); }
 
-  applyCell(logical) { const colors = this.state.colors.slice(); colors[logical] = this.state.erasing ? null : this.state.selected; this.setState({ colors }); }
-  applyDesign(next) { const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, i) => next[i] != null ? next[i] : null); this.setState({ colors }, () => this.push()); }
+  applyCell(logical) {
+    const colors = this.state.colors.slice();
+    const bright = this.state.bright.slice();
+    if (this.state.erasing) { colors[logical] = null; }
+    else { colors[logical] = this.state.selected; bright[logical] = this.state.brushBright; }
+    this.setState({ colors, bright });
+  }
+  applyDesign(next) { const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, i) => next[i] != null ? next[i] : null); const bright = new Array(total).fill(100); this.setState({ colors, bright }, () => this.push()); }
   clear() {
-    this.setState({ colors: new Array(this.totalSegments(this.state.sections)).fill(null), effect: 0x13 });
+    const total = this.totalSegments(this.state.sections);
+    this.setState({ colors: new Array(total).fill(null), bright: new Array(total).fill(100), effect: 0x13 });
     if (this.animRunning) { this.animRunning = false; this.setState({ animationId: null, previewColors: null }); }
     this.sceneGen++;
     if (this.device && this.device.connected) { this.setState({ status: "Cleared" }); this.queueScene(() => this.device.setScene([], { dir: 0x13, bg: [0, 0, 0] })); }
   }
-  fillAll() { this.setState({ colors: new Array(this.totalSegments(this.state.sections)).fill(this.state.selected) }, () => this.push()); }
+  fillAll() { const total = this.totalSegments(this.state.sections); this.setState({ colors: new Array(total).fill(this.state.selected), bright: new Array(total).fill(this.state.brushBright) }, () => this.push()); }
 
   buildPattern(fn) {
     const { sections, rows, transpose, flipH, flipV, selected } = this.state;
@@ -795,7 +810,7 @@ class Component extends DCLogic {
 
   // ---------- scenes ----------
   saveScene() { const n = this.state.sceneName.trim(); if (!n) return; const scene = { name: n, colors: this.state.colors.slice() }; this.setState({ scenes: this.state.scenes.filter((s) => s.name !== n).concat([scene]), sceneName: "" }, this._persist); }
-  loadScene(i) { const sc = this.state.scenes[i]; if (!sc) return; const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, k) => sc.colors[k] != null ? sc.colors[k] : null); this.setState({ colors }, () => this.push()); }
+  loadScene(i) { const sc = this.state.scenes[i]; if (!sc) return; const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, k) => sc.colors[k] != null ? sc.colors[k] : null); const bright = new Array(total).fill(100); this.setState({ colors, bright }, () => this.push()); }
   deleteScene(i) { this.setState({ scenes: this.state.scenes.filter((_, idx) => idx !== i) }, this._persist); }
   exportScenes() {
     const data = JSON.stringify({ app: "cloudgrid", scenes: this.state.scenes }, null, 2);
@@ -1036,10 +1051,14 @@ class Component extends DCLogic {
       const logical = this.visualToLogical(vx, vy, d.width, this.state.rows, this.orient());
       const exists = logical < d.total;
       const c = exists ? src[logical] : null;
+      // Show per-cell brightness on the static canvas (animation previews carry
+      // their own final colors, so don't re-dim those).
+      const cb = exists && !st.previewColors ? st.bright[logical] : null;
+      const shown = c && cb != null && cb < 100 ? this.dimHex(c, cb / 100) : c;
       const banded = exists && (this.sectionOfLogical(logical, st.sections) % 2 === 1);
       let style;
       if (!exists) style = { width: "100%", height: "100%", borderRadius: rad, background: "transparent", border: "1px solid transparent", cursor: "default" };
-      else if (c) style = { width: "100%", height: "100%", borderRadius: rad, background: c, border: "1px solid rgba(0,0,0,0.5)", boxShadow: "0 0 " + Math.round(cell * 0.55) + "px " + c + ", inset 0 0 2px rgba(255,255,255,0.3)", cursor: "crosshair", display: "flex", alignItems: "center", justifyContent: "center" };
+      else if (c) style = { width: "100%", height: "100%", borderRadius: rad, background: shown, border: "1px solid rgba(0,0,0,0.5)", cursor: "crosshair", display: "flex", alignItems: "center", justifyContent: "center" };
       else style = { width: "100%", height: "100%", borderRadius: rad, background: banded ? "#13171e" : "#0f141a", border: "1px solid #1b212a", boxShadow: banded ? "inset 0 0 0 9999px rgba(52,207,107,0.045)" : "none", cursor: "crosshair", display: "flex", alignItems: "center", justifyContent: "center" };
       cells.push({
         key: k, idx: logical, showIdx: exists && st.showIndices, style,
@@ -1121,6 +1140,8 @@ class Component extends DCLogic {
       // paint
       selected: st.selected, selectedUpper: st.selected.toUpperCase(), onColorInput: (e) => this.setSelected(e.target.value),
       swatches, eraserBtn: this._btn(st.erasing),
+      brushBright: st.brushBright, onBrushBright: (e) => this.setBrushBright(Number(e.target.value)),
+      ctxBrights: [100, 75, 50, 25].map((v) => ({ label: v + "%", onClick: () => this.ctxAct(() => this.setCellBright(ctx.logical, v)) })),
       // floating dock
       selectPen: () => this.selectPen(), selectEraser: () => this.selectEraser(),
       colorInputRef: (el) => { this._colorInput = el; },

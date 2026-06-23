@@ -23,20 +23,23 @@ function buildPrompt(desc: string, w: number, h: number): string {
     `correct regions in the correct corners, stripe/segment counts scaled to fit, identifying ` +
     `features where they belong.\n` +
     `- Keep to a few strong colors so shapes stay legible. Don't dither or add noise.\n\n` +
-    `COLOR (light-emitting LEDs):\n` +
-    `- Use BOLD, SATURATED hex. Avoid browns, grays, beiges, near-white — they wash out. For "white" ` +
-    `regions use pure #ffffff so they read as lit, not off.\n` +
+    `COLOR (these are glowing LEDs, not paint — push every color to MAXIMUM saturation):\n` +
+    `- Use fully-saturated primaries. Pure red is #ff0000, NOT a muted "realistic" #aa3a33 or #cc4444 ` +
+    `— a desaturated red reads as pink/brown on the lights. Likewise green #00ff00, blue #0000ff (or a ` +
+    `vivid #1030ff), yellow #ffff00, cyan #00ffff, white #ffffff.\n` +
+    `- For every hue you pick, crank saturation and brightness to the max. Avoid anything washed: no ` +
+    `browns, grays, beiges, dusty or pastel shades, and no near-white.\n` +
     `- Use null only for cells that should be truly dark/off, as deliberate negative space.\n\n` +
     `WORKED EXAMPLE (a different subject and size — copy the technique, not the dimensions). ` +
     `A simple flag with a blue canton top-left and red/white stripes, on a 6-wide × 5-tall grid. ` +
     `Note the blue sits in rows 0-1 AND columns 0-2 (the top-left corner), and the stripes run the ` +
     `full width:\n` +
     `[\n` +
-    `  ["#0a23a0","#0a23a0","#0a23a0","#e01020","#e01020","#e01020"],\n` +
-    `  ["#0a23a0","#0a23a0","#0a23a0","#ffffff","#ffffff","#ffffff"],\n` +
-    `  ["#e01020","#e01020","#e01020","#e01020","#e01020","#e01020"],\n` +
+    `  ["#0000ff","#0000ff","#0000ff","#ff0000","#ff0000","#ff0000"],\n` +
+    `  ["#0000ff","#0000ff","#0000ff","#ffffff","#ffffff","#ffffff"],\n` +
+    `  ["#ff0000","#ff0000","#ff0000","#ff0000","#ff0000","#ff0000"],\n` +
     `  ["#ffffff","#ffffff","#ffffff","#ffffff","#ffffff","#ffffff"],\n` +
-    `  ["#e01020","#e01020","#e01020","#e01020","#e01020","#e01020"]\n` +
+    `  ["#ff0000","#ff0000","#ff0000","#ff0000","#ff0000","#ff0000"]\n` +
     `]\n\n` +
     `Now produce the ${w}×${h} image for "${desc}". Respond with ONLY a JSON array of exactly ${h} ` +
     `rows; each row is an array of exactly ${w} items. Each item is a hex string like "#ff2200" or ` +
