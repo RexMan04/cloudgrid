@@ -7,15 +7,40 @@ const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
 function buildPrompt(desc: string, w: number, h: number): string {
   return (
-    `You are designing a STATIC pixel pattern for an emissive RGB LED grid that is ` +
-    `${w} columns wide and ${h} rows tall, origin top-left. Theme: "${desc}".\n\n` +
-    `Rules:\n` +
-    `- These are light-emitting LEDs: use BOLD, SATURATED colors. Avoid browns, grays, ` +
-    `beiges, and near-white, they look washed out.\n` +
-    `- Use null for pixels that should be off (dark).\n` +
-    `- Make the pattern clearly readable at this low resolution.\n\n` +
-    `Respond with ONLY a JSON array of exactly ${h} rows; each row is an array of exactly ` +
-    `${w} items. Each item is a hex color string like "#ff2200" or null. No prose, no code fences.`
+    `You are a pixel artist composing a STATIC ${w}×${h} image for an emissive RGB LED grid. ` +
+    `Subject: "${desc}".\n\n` +
+    `COORDINATES (this is critical — get placement right):\n` +
+    `- The grid is ${w} columns wide and ${h} rows tall.\n` +
+    `- Row 0 is the TOP. Column 0 is the LEFT.\n` +
+    `- So the top-left corner is row 0 / column 0; the bottom-right is the last row / last column.\n` +
+    `- Anything described as "top-left" (like a flag's canton) belongs in the FIRST rows and the ` +
+    `FIRST columns — never in the middle.\n\n` +
+    `COMPOSITION:\n` +
+    `- This canvas is tiny; plan the whole layout before choosing colors, then make it instantly ` +
+    `recognizable. Fill the FULL grid edge to edge unless the subject is clearly a small object on a ` +
+    `background.\n` +
+    `- For a known subject (flag, logo, letter, symbol, face) reproduce its real layout faithfully: ` +
+    `correct regions in the correct corners, stripe/segment counts scaled to fit, identifying ` +
+    `features where they belong.\n` +
+    `- Keep to a few strong colors so shapes stay legible. Don't dither or add noise.\n\n` +
+    `COLOR (light-emitting LEDs):\n` +
+    `- Use BOLD, SATURATED hex. Avoid browns, grays, beiges, near-white — they wash out. For "white" ` +
+    `regions use pure #ffffff so they read as lit, not off.\n` +
+    `- Use null only for cells that should be truly dark/off, as deliberate negative space.\n\n` +
+    `WORKED EXAMPLE (a different subject and size — copy the technique, not the dimensions). ` +
+    `A simple flag with a blue canton top-left and red/white stripes, on a 6-wide × 5-tall grid. ` +
+    `Note the blue sits in rows 0-1 AND columns 0-2 (the top-left corner), and the stripes run the ` +
+    `full width:\n` +
+    `[\n` +
+    `  ["#0a23a0","#0a23a0","#0a23a0","#e01020","#e01020","#e01020"],\n` +
+    `  ["#0a23a0","#0a23a0","#0a23a0","#ffffff","#ffffff","#ffffff"],\n` +
+    `  ["#e01020","#e01020","#e01020","#e01020","#e01020","#e01020"],\n` +
+    `  ["#ffffff","#ffffff","#ffffff","#ffffff","#ffffff","#ffffff"],\n` +
+    `  ["#e01020","#e01020","#e01020","#e01020","#e01020","#e01020"]\n` +
+    `]\n\n` +
+    `Now produce the ${w}×${h} image for "${desc}". Respond with ONLY a JSON array of exactly ${h} ` +
+    `rows; each row is an array of exactly ${w} items. Each item is a hex string like "#ff2200" or ` +
+    `null. No prose, no code fences.`
   );
 }
 

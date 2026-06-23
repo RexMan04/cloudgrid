@@ -1,13 +1,9 @@
-# Secrets — the Govee API key lives here and must NEVER be committed
+# Secrets — API keys live here and must NEVER be committed
 .env
 .env.local
 
 # Dependencies
 node_modules/
-
-# Build output
-dist/
-web/dist/
 
 # Logs
 *.log

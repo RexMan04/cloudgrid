@@ -18,10 +18,16 @@ It's working well for my setup. I'm still developing it.
 
 - Connect to a Govee RGBIC device directly from Chrome/Edge (Web Bluetooth).
 - Paint individual segments any color; changes push to the lights automatically.
-- Fill / clear / eraser, color swatches + full picker.
-- Configurable segment count and grid columns.
+- Fill / clear / eraser, color swatches + full picker, global brightness.
+- Configurable segment count, sections, and grid rows/columns.
+- Layout calibration: reverse a section, serpentine (snake) wiring, and transpose / flip-H / flip-V to align the on-screen grid to the physical install.
+- Built-in pattern generators and image import (drop in an image, it samples onto the grid).
+- On-device effects via the H703B's native effect engine (Static, Clockwise, Counter-CW, Breathe, Flash) with adjustable speed. These persist and run on the device itself.
+- Live animations streamed from the browser frame-by-frame (Rainbow flow, Color cycle, Chase, Sparkle, Breathe design, Wave), plus GIF/video playback sampled onto the grid.
+- AI pattern generation: describe a pattern in words and Claude/OpenAI returns a color grid (needs an AI key in `.env`, see below).
+- Saved scenes: save, load, delete, and export/import as JSON.
 
-Static scenes only by design: the lights render each design locally, so there's no live animation/framerate. (Animated effects are a planned addition.)
+Two kinds of motion are available: the device's **native effects** (persistent, rendered on-device, no streaming) and **live animations** (the browser computes and streams each frame, so they stop when the tab closes). Plain painted designs are static scenes the device holds locally.
 
 ## Requirements
 
@@ -32,13 +38,25 @@ Static scenes only by design: the lights render each design locally, so there's 
 ## Run
 
 ```bash
-bun install
 bun run dev
 ```
 
-Open **http://localhost:5173**, click **Connect device**, pick your light, and start painting.
+Open **http://localhost:8787**, click **Connect device**, pick your light, and start painting. (`bun install` first if you want editor types; the app itself has no runtime dependencies.)
 
-> On Windows + WSL: run these commands **inside WSL** (the dev server needs the native filesystem), then open `http://localhost:5173` in your Windows browser. Use the `localhost` URL, not the network IP. Web Bluetooth requires a secure context, and `localhost` qualifies.
+One Bun process serves the whole thing: the static frontend and the AI endpoint. The browser talks to the lights directly over Web Bluetooth, so the server is only in the loop for AI generation.
+
+> On Windows + WSL: run this **inside WSL**, then open `http://localhost:8787` in your Windows browser. Use the `localhost` URL, not the network IP. Web Bluetooth requires a secure context, and `localhost` qualifies.
+
+## AI generation (optional)
+
+The AI panel turns a text prompt into a color grid. The key stays server-side and never reaches the browser. Add one of these to `.env` (copy `.env.example`) and the panel works automatically:
+
+```
+ANTHROPIC_API_KEY=...      # or
+OPENAI_API_KEY=...
+```
+
+Everything else works without a key.
 
 ## How it works
 
@@ -50,20 +68,19 @@ count  (1):  number of colored segments
 entries(5n): 01 <R> <G> <B> <segmentIndex>   (repeated)
 ```
 
-split across 20-byte writes (first packet `a3 00`, last `a3 ff`), then a commit packet `33 05 0a 20 03`. See [`src/govee/a3.ts`](src/govee/a3.ts) and [`src/govee/ble.ts`](src/govee/ble.ts).
+split across 20-byte writes (first packet `a3 00`, last `a3 ff`), then a commit packet `33 05 0a 20 03`. The protocol, scene encoder, and image sampler all live in [`web/cloudgrid-core.js`](web/cloudgrid-core.js).
 
 ## Project layout
 
-- `src/govee/`: the protocol (packet builder, a3 scene encoder, Web Bluetooth device wrapper).
-- `src/`: the React UI (grid editor, toolbar, Zustand store).
-- `server/`: optional Bun proxy for the Govee Cloud API (whole-house control of non-segment devices).
+- `web/`: the frontend. `CloudGrid.dc.html` is the UI (a self-contained design component — no build step; React loads from a CDN at runtime), `cloudgrid-core.js` is the Govee BLE protocol + image sampler, `support.js` is the design-component runtime.
+- `server/`: the Bun server. `index.ts` serves `web/` and the AI endpoint; `ai.ts` holds the AI call.
 - `tools/`: reverse-engineering utilities (BTSnoop decoder, a3 stream reassembler).
 
 ## Roadmap
 
-- Map segment index → physical position; full 24×11 multi-device ceiling grid with snake-layout calibration.
-- Saved scenes, gradients, presets, global brightness.
-- Animated effects via the device's native effect engine.
+- Map segment index → physical position; full 24×11 multi-device ceiling grid.
+- Gradients and presets.
+- Broader device support beyond the H703B.
 
 ## License
 

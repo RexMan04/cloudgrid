@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: #0b0d10; font-family: "Geist", ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  input[type="range"] { accent-color: #34cf6b; }
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-thumb { background: #262b33; border-radius: 7px; border: 3px solid #0e1116; }
+  ::-webkit-scrollbar-thumb:hover { background: #323943; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes cgspin { to { transform: rotate(360deg); } }
+  @keyframes cgpulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+</style>
+<script src="cloudgrid-core.js"></script>
+</helmet>
+
+<div style="height:100vh; display:flex; flex-direction:column; background:#0b0d10; color:#e6e9ef; font-size:13px; overflow:hidden;">
+
+  <!-- ===================== MENU BAR ===================== -->
+  <div style="display:flex; align-items:center; gap:4px; height:46px; padding:0 12px; background:#0e1116; border-bottom:1px solid #1e232b; position:relative; z-index:40; flex:none;">
+    <div style="display:flex; align-items:center; gap:9px; padding-right:10px;">
+      <div style="display:grid; grid-template-columns:repeat(3,4px); grid-template-rows:repeat(3,4px); gap:2px;">
+        <div style="width:4px;height:4px;border-radius:1px;background:#34cf6b;"></div><div style="width:4px;height:4px;border-radius:1px;background:#34cf6b;opacity:.5;"></div><div style="width:4px;height:4px;border-radius:1px;background:#34cf6b;"></div>
+        <div style="width:4px;height:4px;border-radius:1px;background:#34cf6b;opacity:.5;"></div><div style="width:4px;height:4px;border-radius:1px;background:#34cf6b;"></div><div style="width:4px;height:4px;border-radius:1px;background:#34cf6b;opacity:.5;"></div>
+        <div style="width:4px;height:4px;border-radius:1px;background:#34cf6b;"></div><div style="width:4px;height:4px;border-radius:1px;background:#34cf6b;opacity:.5;"></div><div style="width:4px;height:4px;border-radius:1px;background:#34cf6b;"></div>
+      </div>
+      <span style="font-weight:600; font-size:14px; letter-spacing:-0.01em;">CloudGrid</span>
+    </div>
+
+    <!-- FILE -->
+    <div style="position:relative;">
+      <button onClick="{{ toggleFile }}" style="{{ menuBtnFile }}">File</button>
+      <sc-if value="{{ menu.file }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ dropStyle }}">
+          <button onClick="{{ mNew }}" style="{{ dropItem }}"><span>New design</span><span style="{{ kbd }}">⌫</span></button>
+          <button onClick="{{ mSave }}" style="{{ dropItem }}"><span>Save scene…</span></button>
+          <button onClick="{{ mExport }}" style="{{ dropItem }}"><span>Export library</span></button>
+          <label for="cg-import" style="{{ dropItem }}"><span>Import library…</span></label>
+        </div>
+      </sc-if>
+    </div>
+    <!-- EDIT -->
+    <div style="position:relative;">
+      <button onClick="{{ toggleEdit }}" style="{{ menuBtnEdit }}">Edit</button>
+      <sc-if value="{{ menu.edit }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ dropStyle }}">
+          <button onClick="{{ mFill }}" style="{{ dropItem }}"><span>Fill all</span></button>
+          <button onClick="{{ mClear }}" style="{{ dropItem }}"><span>Clear canvas</span></button>
+          <button onClick="{{ mEraser }}" style="{{ dropItem }}"><span>Toggle eraser</span><span style="{{ erMark }}">●</span></button>
+        </div>
+      </sc-if>
+    </div>
+    <!-- VIEW -->
+    <div style="position:relative;">
+      <button onClick="{{ toggleView }}" style="{{ menuBtnView }}">View</button>
+      <sc-if value="{{ menu.view }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ dropStyle }}">
+          <button onClick="{{ mIndices }}" style="{{ dropItem }}"><span>Show segment indices</span><span style="{{ ixMark }}">✓</span></button>
+          <button onClick="{{ mTranspose }}" style="{{ dropItem }}"><span>Transpose</span><span style="{{ tpMark }}">✓</span></button>
+          <button onClick="{{ mFlipH }}" style="{{ dropItem }}"><span>Flip horizontal</span><span style="{{ fhMark }}">✓</span></button>
+          <button onClick="{{ mFlipV }}" style="{{ dropItem }}"><span>Flip vertical</span><span style="{{ fvMark }}">✓</span></button>
+        </div>
+      </sc-if>
+    </div>
+    <!-- DEVICE -->
+    <div style="position:relative;">
+      <button onClick="{{ toggleDevice }}" style="{{ menuBtnDevice }}">Device</button>
+      <sc-if value="{{ menu.device }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ dropStyle }}">
+          <button onClick="{{ mConnect }}" style="{{ dropItem }}"><span>{{ connectLabel }}</span></button>
+          <button onClick="{{ mPower }}" style="{{ dropItem }}"><span>Power on / off</span></button>
+          <button onClick="{{ mPush }}" style="{{ dropItem }}"><span>Push design now</span></button>
+        </div>
+      </sc-if>
+    </div>
+    <!-- HELP -->
+    <div style="position:relative;">
+      <button onClick="{{ toggleHelp }}" style="{{ menuBtnHelp }}">Help</button>
+      <sc-if value="{{ menu.help }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ helpDropStyle }}">
+          <div style="padding:7px 9px 4px; font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#6c7686;">Keyboard shortcuts</div>
+          <sc-for list="{{ shortcuts }}" as="s" hint-placeholder-count="7">
+            <div style="display:flex; align-items:center; gap:12px; padding:6px 9px;">
+              <div style="display:flex; align-items:center; gap:4px; flex:none; width:78px;">
+                <sc-for list="{{ s.keys }}" as="kk" hint-placeholder-count="1">
+                  <kbd style="{{ kbdChip }}">{{ kk.k }}</kbd>
+                </sc-for>
+              </div>
+              <span style="font-size:12px; color:#cfd6e0; flex:1;">{{ s.label }}</span>
+            </div>
+          </sc-for>
+          <div style="height:1px; background:#262b33; margin:5px 0;"></div>
+          <div style="padding:2px 9px 6px; font-size:11px; color:#6c7686; line-height:1.5;">Tools also live in the dock at the canvas top-left. Shortcuts pause while typing in a field.</div>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="flex:1;"></div>
+
+    <!-- status pill -->
+    <div style="display:flex; align-items:center; gap:8px; height:30px; padding:0 11px; background:#14181e; border:1px solid #232932; border-radius:8px; margin-right:8px;">
+      <span style="{{ statusDot }}"></span>
+      <span style="font-size:12px; color:#aeb6c2; max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ status }}</span>
+      <sc-if value="{{ busy }}" hint-placeholder-val="{{ false }}">
+        <span style="width:11px; height:11px; border:2px solid #34cf6b; border-top-color:transparent; border-radius:50%; animation:cgspin .7s linear infinite; display:inline-block;"></span>
+      </sc-if>
+    </div>
+
+    <button onClick="{{ mConnect }}" style="{{ connectBtn }}">{{ connectLabel }}</button>
+  </div>
+
+  <!-- ===================== WORKSPACE ===================== -->
+  <div style="{{ workspaceStyle }}">
+
+    <!-- ---- TOOL PANEL ---- -->
+    <div style="{{ panelStyle }}">
+      <div style="{{ panelInnerStyle }}">
+        <!-- PAINT -->
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tPaint }}" style="{{ headPaint }}"><span style="{{ chevPaint }}">›</span><span style="flex:1; text-align:left;">Paint</span></button>
+          <sc-if value="{{ expanded.paint }}" hint-placeholder-val="{{ true }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Color</div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <input type="color" value="{{ selected }}" onInput="{{ onColorInput }}" style="width:46px; height:38px; padding:0; border:1px solid #2e343d; border-radius:8px; background:none; cursor:pointer;" />
+              <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#cfd6e0; letter-spacing:.02em;">{{ selectedUpper }}</div>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px;">
+              <sc-for list="{{ swatches }}" as="sw" hint-placeholder-count="9">
+                <button onClick="{{ sw.onClick }}" title="{{ sw.color }}" style="{{ sw.style }}"></button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Brush</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button onClick="{{ mEraser }}" style="{{ eraserBtn }}">Eraser</button>
+              <button onClick="{{ mFill }}" style="{{ btnGhost }}">Fill all</button>
+              <button onClick="{{ mClear }}" style="{{ btnGhost }}">Clear</button>
+            </div>
+            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Click or drag across the grid to paint. Right-click a cell for quick actions. Changes push to the lights on release.</div>
+          </div>
+          </div>
+        </sc-if>
+        </div>
+
+        <!-- PATTERNS -->
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tPatterns }}" style="{{ headPatterns }}"><span style="{{ chevPatterns }}">›</span><span style="flex:1; text-align:left;">Patterns</span></button>
+          <sc-if value="{{ expanded.patterns }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Generators</div>
+            <div style="display:flex; flex-wrap:wrap; gap:7px;">
+              <sc-for list="{{ patterns }}" as="p" hint-placeholder-count="6">
+                <button onClick="{{ p.onClick }}" style="{{ btnGhost }}">{{ p.label }}</button>
+              </sc-for>
+            </div>
+            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Gradient, stripes and checker use your selected color. Rainbows fill the full spectrum across the grid.</div>
+          </div>
+          </div>
+        </sc-if>
+        </div>
+
+        <!-- EFFECTS -->
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tEffects }}" style="{{ headEffects }}"><span style="{{ chevEffects }}">›</span><span style="flex:1; text-align:left;">Effects</span></button>
+          <sc-if value="{{ expanded.effects }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">On-device effect</div>
+            <div style="display:flex; flex-wrap:wrap; gap:7px;">
+              <sc-for list="{{ effects }}" as="e" hint-placeholder-count="5">
+                <button onClick="{{ e.onClick }}" style="{{ e.style }}">{{ e.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex; align-items:center; gap:9px; padding-top:2px;">
+              <span style="font-size:11.5px; color:#8b94a3;">Try byte</span>
+              <input type="number" min="0" max="255" value="{{ effect }}" onChange="{{ onEffectByte }}" style="{{ numInput }}" />
+              <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#34cf6b;">{{ effectHex }}</span>
+            </div>
+            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Motion effects run on the controller and keep animating after the page closes. <span style="color:#aeb6c2;">Static</span> holds your exact per-dot design. Speed is in the inspector.</div>
+          </div>
+          </div>
+        </sc-if>
+        </div>
+
+        <!-- ANIMATE -->
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tAnimate }}" style="{{ headAnimate }}"><span style="{{ chevAnimate }}">›</span><span style="flex:1; text-align:left;">Animate</span></button>
+          <sc-if value="{{ expanded.animate }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Live animation</div>
+            <div style="display:flex; flex-wrap:wrap; gap:7px;">
+              <sc-for list="{{ anims }}" as="a" hint-placeholder-count="6">
+                <button onClick="{{ a.onClick }}" style="{{ a.style }}">{{ a.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button onClick="{{ stopAnim }}" style="{{ btnGhost }}">Stop</button>
+            </div>
+            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Streamed from the browser at the inspector Speed; previews live on the grid here and pushes per-light motion to the device. Breathe &amp; Wave animate your painted design.</div>
+          </div>
+          </div>
+        </sc-if>
+        </div>
+
+        <!-- IMPORT -->
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tImport }}" style="{{ headImport }}"><span style="{{ chevImport }}">›</span><span style="flex:1; text-align:left;">Import</span></button>
+          <sc-if value="{{ expanded.import }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Image</div>
+            <label for="cg-img" style="{{ btnPrimaryGhost }}">Choose image…</label>
+            <input id="cg-img" type="file" accept="image/*" style="display:none;" onChange="{{ onChooseImage }}" />
+            <div style="display:flex; flex-wrap:wrap; gap:6px;">
+              <sc-for list="{{ fits }}" as="f" hint-placeholder-count="3">
+                <button onClick="{{ f.onClick }}" style="{{ f.style }}">{{ f.label }}</button>
+              </sc-for>
+              <button onClick="{{ toggleRotate }}" style="{{ rotateBtn }}">Rotate 90°</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:9px; padding-top:2px;">
+              <div style="{{ sliderRow }}"><span style="{{ sliderLab }}">Saturation</span><input type="range" min="0" max="300" value="{{ imgSat }}" onInput="{{ onImgSat }}" style="flex:1;" /><span style="{{ sliderVal }}">{{ imgSat }}%</span></div>
+              <div style="{{ sliderRow }}"><span style="{{ sliderLab }}">Brightness</span><input type="range" min="0" max="200" value="{{ imgBright }}" onInput="{{ onImgBright }}" style="flex:1;" /><span style="{{ sliderVal }}">{{ imgBright }}%</span></div>
+              <div style="{{ sliderRow }}"><span style="{{ sliderLab }}">Contrast</span><input type="range" min="0" max="300" value="{{ imgContrast }}" onInput="{{ onImgContrast }}" style="flex:1;" /><span style="{{ sliderVal }}">{{ imgContrast }}%</span></div>
+            </div>
+            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Samples to the {{ gridW }}×{{ gridH }} grid ({{ orient }}). contain = whole image, cover = fill &amp; crop, stretch = ignore aspect.</div>
+          </div>
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">GIF / video</div>
+            <label for="cg-media" style="{{ btnPrimaryGhost }}">Choose GIF / video…</label>
+            <input id="cg-media" type="file" accept="image/gif,image/webp,image/apng,video/*" style="display:none;" onChange="{{ onChooseMedia }}" />
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button onClick="{{ stopAnim }}" style="{{ btnGhost }}">Stop</button>
+              <span style="font-size:11.5px; color:#8b94a3;">{{ mediaStatus }}</span>
+            </div>
+            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Samples each frame and loops it live (uses Speed for frame rate). Needs Chrome/Edge for GIF decoding; capped at 240 frames.</div>
+          </div>
+          </div>
+        </sc-if>
+        </div>
+
+        <!-- AI -->
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tAi }}" style="{{ headAi }}"><span style="{{ chevAi }}">›</span><span style="flex:1; text-align:left;">AI</span></button>
+          <sc-if value="{{ expanded.ai }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Generate pattern</div>
+            <input type="text" value="{{ aiPrompt }}" onInput="{{ onAiPrompt }}" onKeyDown="{{ onAiKey }}" placeholder="sunset, lightning, US flag…" style="{{ textInput }}" />
+            <button onClick="{{ generateAI }}" style="{{ btnPrimary }}">{{ aiBtnLabel }}</button>
+            <span style="font-size:11.5px; color:#8b94a3;">{{ aiStatus }}</span>
+            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Generates a {{ gridW }}×{{ gridH }} pattern. Needs an AI key in <span style="color:#aeb6c2;">.env</span> (ANTHROPIC_API_KEY or OPENAI_API_KEY) — the key never reaches the browser.</div>
+          </div>
+          </div>
+        </sc-if>
+        </div>
+
+        <!-- SCENES -->
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tScenes }}" style="{{ headScenes }}"><span style="{{ chevScenes }}">›</span><span style="flex:1; text-align:left;">Scenes</span></button>
+          <sc-if value="{{ expanded.scenes }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Save current</div>
+            <div style="display:flex; gap:7px;">
+              <input type="text" value="{{ sceneName }}" onInput="{{ onSceneName }}" onKeyDown="{{ onSceneKey }}" placeholder="scene name" style="{{ textInput }}" />
+              <button onClick="{{ saveScene }}" style="{{ btnPrimary }}">Save</button>
+            </div>
+            <div style="display:flex; gap:7px;">
+              <button onClick="{{ mExport }}" style="{{ btnGhost }}">Export library</button>
+              <label for="cg-import2" style="{{ btnGhost }}">Import</label>
+              <input id="cg-import2" type="file" accept="application/json" style="display:none;" onChange="{{ onImportScenes }}" />
+            </div>
+          </div>
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Library · {{ sceneCount }}</div>
+            <sc-if value="{{ hasScenes }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <sc-for list="{{ scenes }}" as="sc" hint-placeholder-count="3">
+                  <div style="display:flex; align-items:center; gap:9px; background:#0e1116; border:1px solid #232932; border-radius:7px; padding:7px 9px;">
+                    <span style="font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ sc.name }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6c7686;">{{ sc.lit }} lit</span>
+                    <button onClick="{{ sc.onLoad }}" style="{{ chipBtn }}">Load</button>
+                    <button onClick="{{ sc.onDelete }}" style="{{ chipBtnX }}">✕</button>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ noScenes }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size:11.5px; color:#6c7686;">No saved scenes yet. Paint something and save it above.</div>
+            </sc-if>
+          </div>
+          </div>
+        </sc-if>
+        </div>
+
+        <!-- CALIBRATE -->
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tCalibrate }}" style="{{ headCalibrate }}"><span style="{{ chevCalibrate }}">›</span><span style="flex:1; text-align:left;">Calibrate</span></button>
+          <sc-if value="{{ expanded.calibrate }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Orientation</div>
+            <div style="{{ sliderRow }}">
+              <span style="{{ sliderLab }}">Run length</span>
+              <input type="number" min="1" max="45" value="{{ rows }}" onChange="{{ onRows }}" style="{{ numInput }}" />
+              <span style="font-size:11.5px; color:#6c7686;">LEDs / run</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px;">
+              <button onClick="{{ mTranspose }}" style="{{ transposeBtn }}">Transpose</button>
+              <button onClick="{{ mFlipH }}" style="{{ flipHBtn }}">Flip ↔</button>
+              <button onClick="{{ mFlipV }}" style="{{ flipVBtn }}">Flip ↕</button>
+            </div>
+            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner.</div>
+          </div>
+          <div style="{{ cardStyle }}">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div style="{{ cardHead }}">Sections</div>
+              <button onClick="{{ addSection }}" style="{{ addBtn }}">+ Add</button>
+            </div>
+            <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="2">
+              <div style="display:flex; flex-wrap:wrap; align-items:center; gap:7px; background:#0e1116; border:1px solid #232932; border-radius:7px; padding:8px 9px;">
+                <span style="font-weight:600; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#8b94a3; margin-right:2px;">S{{ sec.num }}</span>
+                <input type="number" min="1" max="45" value="{{ sec.length }}" onChange="{{ sec.onLen }}" style="{{ numInputSm }}" />
+                <button onClick="{{ sec.onReverse }}" style="{{ sec.revStyle }}">Reverse</button>
+                <button onClick="{{ sec.onSnake }}" style="{{ sec.snakeStyle }}">Snake</button>
+                <sc-if value="{{ sec.canRemove }}" hint-placeholder-val="{{ false }}">
+                  <button onClick="{{ sec.onRemove }}" style="{{ chipBtnX }}">✕</button>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          </div>
+        </sc-if>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- CANVAS ---- -->
+    <div onPointerDown="{{ startDragPanel }}" style="{{ splitterLeft }}"><div style="{{ splitterGrip }}"></div></div>
+    <div style="{{ canvasAreaStyle }}">
+      <div style="display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid #1e232b; flex:none; background:#0c0f13; flex-wrap:nowrap; overflow:hidden; white-space:nowrap;">
+        <span style="font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:#6c7686; font-weight:600;">Canvas</span>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#aeb6c2; white-space:nowrap;">{{ gridW }} × {{ gridH }}</span>
+        <span style="width:1px; height:14px; background:#262b33; flex:none;"></span>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#34cf6b;">{{ litCount }}</span>
+        <span style="font-size:12px; color:#6c7686;">lit / {{ total }}</span>
+        <sc-if value="{{ animating }}" hint-placeholder-val="{{ false }}">
+          <span style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; color:#34cf6b; margin-left:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#34cf6b;animation:cgpulse 1s ease-in-out infinite;"></span>live</span>
+        </sc-if>
+        <div style="flex:1;"></div>
+        <button onClick="{{ mIndices }}" style="{{ idxBtn }}">Indices</button>
+      </div>
+      <div style="position:relative; flex:1; min-height:0; display:flex;">
+        <!-- floating tool dock -->
+        <div style="position:absolute; top:14px; left:14px; z-index:8; display:flex; flex-direction:column; gap:7px; padding:7px; background:#13171d; border:1px solid #2a313b; border-radius:12px; box-shadow:0 12px 34px rgba(0,0,0,0.5);">
+          <button onClick="{{ selectPen }}" title="Brush — B" style="{{ penBtn }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+          </button>
+          <button onClick="{{ selectEraser }}" title="Eraser — E" style="{{ eraserToolBtn }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.24 3.56l4.2 4.2a2 2 0 0 1 0 2.82L12.6 18.4H7.2l-3.96-3.96a2 2 0 0 1 0-2.82l9.18-9.18a2 2 0 0 1 2.82 0z"></path><line x1="8" y1="8" x2="15" y2="15"></line><line x1="20.5" y1="20.5" x2="11" y2="20.5"></line></svg>
+          </button>
+          <div style="height:1px; background:#262b33; margin:1px 3px;"></div>
+          <label title="Pick color — C" style="{{ colorToolBtn }}">
+            <input ref="{{ colorInputRef }}" type="color" value="{{ selected }}" onInput="{{ onColorInput }}" style="position:absolute; inset:0; opacity:0; width:100%; height:100%; padding:0; border:none; cursor:pointer;" />
+            <span style="{{ colorToolSwatch }}"></span>
+          </label>
+        </div>
+        <div ref="{{ canvasViewport }}" style="flex:1; display:flex; align-items:center; justify-content:center; padding:24px; min-height:0; overflow:auto; background:radial-gradient(120% 120% at 50% 0%, #12161c 0%, #0a0c10 70%);">
+        <div style="{{ gridStyle }}">
+          <sc-for list="{{ cells }}" as="c" hint-placeholder-count="88">
+            <div onPointerDown="{{ c.onDown }}" onPointerEnter="{{ c.onEnter }}" onContextMenu="{{ c.onCtx }}" style="{{ c.style }}">
+              <sc-if value="{{ c.showIdx }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',monospace; font-size:8px; color:rgba(255,255,255,.4); pointer-events:none;">{{ c.idx }}</span></sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- ---- INSPECTOR ---- -->
+    <div onPointerDown="{{ startDragInspector }}" style="{{ splitterRight }}"><div style="{{ splitterGrip }}"></div></div>
+    <div style="{{ inspectorStyle }}">
+      <div style="{{ cardStyle }}">
+        <div style="{{ cardHead }}">Device</div>
+        <div style="display:flex; align-items:center; gap:9px;">
+          <span style="{{ statusDot }}"></span>
+          <span style="font-size:12.5px; color:#cfd6e0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ deviceLine }}</span>
+        </div>
+        <div style="display:flex; gap:7px; flex-wrap:wrap;">
+          <button onClick="{{ mConnect }}" style="{{ connectBtnSm }}">{{ connectLabel }}</button>
+          <button onClick="{{ mPower }}" style="{{ powerBtn }}">Power</button>
+        </div>
+        <button onClick="{{ mPush }}" style="{{ pushBtn }}">Push design now</button>
+      </div>
+
+      <div style="{{ cardStyle }}">
+        <div style="{{ cardHead }}">Output</div>
+        <div style="{{ sliderRow }}"><span style="{{ sliderLab }}">Brightness</span><input type="range" min="0" max="100" value="{{ brightness }}" onInput="{{ onBright }}" style="flex:1;" /><span style="{{ sliderVal }}">{{ brightness }}%</span></div>
+        <div style="{{ sliderRow }}"><span style="{{ sliderLab }}">Speed</span><input type="range" min="1" max="100" value="{{ speed }}" onInput="{{ onSpeed }}" style="flex:1;" /><span style="{{ sliderVal }}">{{ speed }}</span></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding-top:2px;">
+          <span style="font-size:11.5px; color:#8b94a3;">Effect</span>
+          <span style="display:flex; align-items:center; gap:7px;"><span style="font-size:12px; color:#cfd6e0;">{{ effectName }}</span><span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#34cf6b;">{{ effectHex }}</span></span>
+        </div>
+      </div>
+
+      <div style="{{ cardStyle }}">
+        <div style="{{ cardHead }}">Design</div>
+        <div style="{{ statRow }}"><span style="{{ statLab }}">Lit segments</span><span style="{{ statVal }}">{{ litCount }}</span></div>
+        <div style="{{ statRow }}"><span style="{{ statLab }}">Grid</span><span style="{{ statVal }}">{{ gridW }} × {{ gridH }}</span></div>
+        <div style="{{ statRow }}"><span style="{{ statLab }}">Total segments</span><span style="{{ statVal }}">{{ total }}</span></div>
+        <div style="{{ statRow }}"><span style="{{ statLab }}">Sections</span><span style="{{ statVal }}">{{ sceneSectionCount }}</span></div>
+        <div style="{{ statRow }}"><span style="{{ statLab }}">Run length</span><span style="{{ statVal }}">{{ rows }}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- shared hidden import input for File menu -->
+  <input id="cg-import" type="file" accept="application/json" style="display:none;" onChange="{{ onImportScenes }}" />
+
+  <!-- menu dismiss overlay -->
+  <sc-if value="{{ anyMenu }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeMenus }}" style="position:fixed; inset:0; z-index:30;"></div>
+  </sc-if>
+
+  <!-- context menu -->
+  <sc-if value="{{ ctxOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeCtx }}" onContextMenu="{{ closeCtx }}" style="position:fixed; inset:0; z-index:50;"></div>
+    <div style="{{ ctxStyle }}">
+      <button onClick="{{ ctxPaint }}" style="{{ dropItem }}"><span>Paint with selected</span><span style="width:11px;height:11px;border-radius:3px;{{ ctxSwatchBg }}"></span></button>
+      <button onClick="{{ ctxErase }}" style="{{ dropItem }}"><span>Erase cell</span></button>
+      <button onClick="{{ ctxEyedrop }}" style="{{ dropItem }}"><span>Pick color from cell</span></button>
+      <div style="height:1px; background:#262b33; margin:5px 0;"></div>
+      <button onClick="{{ ctxFillSection }}" style="{{ dropItem }}"><span>Fill section</span></button>
+      <button onClick="{{ ctxClearSection }}" style="{{ dropItem }}"><span>Clear section</span></button>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const sections = [
+      { length: 44, reversed: false, serpentine: false },
+      { length: 44, reversed: false, serpentine: false },
+    ];
+    this.state = {
+      connected: false, status: "Not connected", busy: false, powered: true,
+      sections, rows: 11, transpose: false, flipH: false, flipV: false,
+      colors: new Array(this.totalSegments(sections)).fill(null),
+      previewColors: null,
+      selected: "#ff0000", erasing: false,
+      brightness: 100, effect: 0x13, speed: 50,
+      animationId: null, scenes: [],
+      // ui
+      layout: "studio", tool: "paint", openMenu: null, showIndices: false,
+      expanded: { paint: true, patterns: false, effects: false, animate: false, import: false, ai: false, scenes: false, calibrate: false, help: false },
+      ctx: null, viewportW: 760, viewportH: 560, panelW: 344, inspectorW: 308,
+      // tool-local
+      fit: "contain", rotate: false, imgSat: 100, imgBright: 100, imgContrast: 100,
+      sceneName: "", mediaStatus: "", aiPrompt: "", aiStatus: "", aiBusy: false,
+    };
+    // non-render instance state
+    this.device = null;
+    this.pushing = false; this.pendingPush = false;
+    this.animRunning = false; this.animFrame = 0; this.playbackFrames = null;
+    this.sceneChain = Promise.resolve(); this.sceneGen = 0;
+    this.imgEl = null; this.imgW = 0; this.imgH = 0;
+    this.painting = false;
+    this._persist = this._persist.bind(this);
+
+    this.SWATCHES = ["#ff0000", "#ff7a00", "#ffd400", "#00ff00", "#00ffd5", "#0066ff", "#8a2be2", "#ff00aa", "#ffffff"];
+    this.EFFECTS = [
+      { label: "Static", dir: 0x13 }, { label: "Clockwise", dir: 0x09 },
+      { label: "Counter-CW", dir: 0x0a }, { label: "Breathe", dir: 0x14 }, { label: "Flash", dir: 0x0f },
+    ];
+    this.TABS = [
+      { key: "paint", label: "Paint" }, { key: "patterns", label: "Patterns" },
+      { key: "effects", label: "Effects" }, { key: "animate", label: "Animate" },
+      { key: "import", label: "Import" }, { key: "ai", label: "AI" },
+      { key: "scenes", label: "Scenes" }, { key: "calibrate", label: "Calibrate" },
+    ];
+    const hsl = (h, s, l) => this.hslHex(h, s, l);
+    const dim = (hex, t) => this.dim(hex, t);
+    this.PATTERNS = [
+      { label: "Rainbow →", fn: (vx, _vy, w) => hsl(w > 1 ? vx / (w - 1) : 0, 1, 0.5) },
+      { label: "Rainbow ↓", fn: (_vx, vy, _w, h) => hsl(h > 1 ? vy / (h - 1) : 0, 1, 0.5) },
+      { label: "Gradient →", fn: (vx, _vy, w, _h, sel) => dim(sel, w > 1 ? 1 - vx / (w - 1) : 1) },
+      { label: "V-stripes", fn: (vx) => (vx % 2 ? null : null) },
+      { label: "H-stripes", fn: (_vx, vy, _w, _h, sel) => (vy % 2 ? null : sel) },
+      { label: "Checker", fn: (vx, vy, _w, _h, sel) => ((vx + vy) % 2 ? null : sel) },
+    ];
+    // fix V-stripes to use selected color
+    this.PATTERNS[3].fn = (vx, _vy, _w, _h, sel) => (vx % 2 ? null : sel);
+    this.ANIMATIONS = [
+      { id: "rainbow", label: "Rainbow flow", fn: (vx, _vy, c) => hsl(((c.w > 1 ? vx / c.w : 0) + c.frame * 0.03) % 1, 1, 0.5) },
+      { id: "cycle", label: "Color cycle", fn: (_vx, _vy, c) => hsl((c.frame * 0.03) % 1, 1, 0.5) },
+      { id: "chase", label: "Chase", fn: (vx, _vy, c) => (vx === c.frame % c.w ? c.selected : null) },
+      { id: "sparkle", label: "Sparkle", fn: (vx, vy, c) => (((vx * 73 + vy * 131 + c.frame * 977) % 97) < 12 ? c.selected : null) },
+      { id: "breathe", label: "Breathe design", fn: (vx, vy, c) => { const b = c.designAt(vx, vy); if (!b) return null; const t = (Math.sin(c.frame * 0.25) + 1) / 2; return dim(b, 0.15 + 0.85 * t); } },
+      { id: "wave", label: "Wave", fn: (vx, vy, c) => { const b = c.designAt(vx, vy) || c.selected; const t = (Math.sin(c.frame * 0.3 - vx * 0.5) + 1) / 2; return dim(b, 0.1 + 0.9 * t); } },
+    ];
+  }
+
+  // ---------- lifecycle ----------
+  componentDidMount() {
+    try {
+      const raw = localStorage.getItem("cloudgrid");
+      if (raw) {
+        const p = JSON.parse(raw);
+        const patch = {};
+        ["sections", "rows", "transpose", "flipH", "flipV", "selected", "brightness", "effect", "speed", "scenes"].forEach((k) => {
+          if (p[k] != null) patch[k] = p[k];
+        });
+        patch.colors = new Array(this.totalSegments(patch.sections || this.state.sections)).fill(null);
+        this.setState(patch);
+      }
+    } catch (e) {}
+    this._up = () => { if (this.painting) { this.painting = false; this.push(); } };
+    window.addEventListener("pointerup", this._up);
+    this._keydown = (e) => {
+      const tag = e.target && e.target.tagName;
+      if (tag && /^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "b" || k === "p") { this.selectPen(); e.preventDefault(); }
+      else if (k === "e" || k === "x") { this.selectEraser(); e.preventDefault(); }
+      else if (k === "c") { if (this._colorInput && this._colorInput.click) this._colorInput.click(); e.preventDefault(); }
+      else if (k === "f") { this.fillAll(); e.preventDefault(); }
+      else if (k === "i") { this.toggleIndices(); e.preventDefault(); }
+      else if (k >= "1" && k <= "9") { const c = this.SWATCHES[parseInt(k, 10) - 1]; if (c) this.setSelected(c); e.preventDefault(); }
+      else if (e.key === "Escape") { this.setState({ openMenu: null, ctx: null }); }
+    };
+    window.addEventListener("keydown", this._keydown);
+    this._measure = () => {
+      const el = this._viewport;
+      if (!el) return;
+      const w = el.clientWidth, h = el.clientHeight;
+      if (w && h && (Math.abs(w - this.state.viewportW) > 1 || Math.abs(h - this.state.viewportH) > 1)) {
+        this.setState({ viewportW: w, viewportH: h });
+      }
+    };
+    if (window.ResizeObserver) { this._ro = new ResizeObserver(this._measure); }
+    requestAnimationFrame(() => { if (this._viewport && this._ro) this._ro.observe(this._viewport); this._measure(); });
+    window.addEventListener("resize", this._measure);
+  }
+  componentWillUnmount() {
+    window.removeEventListener("pointerup", this._up);
+    window.removeEventListener("resize", this._measure);
+    window.removeEventListener("keydown", this._keydown);
+    if (this._ro) this._ro.disconnect();
+    this.animRunning = false;
+    if (this.device) this.device.disconnect();
+  }
+  _persist() {
+    try {
+      const s = this.state;
+      localStorage.setItem("cloudgrid", JSON.stringify({
+        sections: s.sections, rows: s.rows, transpose: s.transpose, flipH: s.flipH, flipV: s.flipV,
+        selected: s.selected, brightness: s.brightness, effect: s.effect, speed: s.speed, scenes: s.scenes,
+      }));
+    } catch (e) {}
+  }
+
+  // ---------- layout math ----------
+  totalSegments(sections) { return sections.reduce((a, s) => a + s.length, 0); }
+  gridWidth(total, rows) { return Math.max(1, Math.ceil(total / Math.max(1, rows))); }
+  gridDims(width, rows, transpose) { return transpose ? { w: rows, h: width } : { w: width, h: rows }; }
+  visualToLogical(vx, vy, width, rows, o) {
+    const d = this.gridDims(width, rows, o.transpose);
+    const x = o.flipH ? d.w - 1 - vx : vx;
+    const y = o.flipV ? d.h - 1 - vy : vy;
+    const col = o.transpose ? y : x;
+    const row = o.transpose ? x : y;
+    return col * rows + row;
+  }
+  localPhysical(p, s, rows) {
+    if (s.serpentine && rows > 0) {
+      const run = Math.floor(p / rows); const pos = p % rows;
+      if (run % 2 === 1) p = run * rows + (rows - 1 - pos);
+    }
+    if (s.reversed) p = s.length - 1 - p;
+    return p;
+  }
+  logicalToPhysical(p, sections, rows) {
+    let offset = 0;
+    for (const s of sections) {
+      if (p < offset + s.length) return offset + this.localPhysical(p - offset, s, rows);
+      offset += s.length;
+    }
+    return p;
+  }
+  sectionOfLogical(p, sections) {
+    let offset = 0;
+    for (let i = 0; i < sections.length; i++) { if (p < offset + sections[i].length) return i; offset += sections[i].length; }
+    return Math.max(0, sections.length - 1);
+  }
+  hexToRgb(hex) { return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]; }
+  hslHex(h, s, l) {
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => { const k = (n + h * 12) % 12; const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); return Math.round(255 * c).toString(16).padStart(2, "0"); };
+    return "#" + f(0) + f(8) + f(4);
+  }
+  dim(hex, t) { const [r, g, b] = this.hexToRgb(hex); return "#" + [r, g, b].map((x) => Math.round(x * t).toString(16).padStart(2, "0")).join(""); }
+  dimHex(hex, t) { return this.dim(hex, t); }
+
+  orient() { return { transpose: this.state.transpose, flipH: this.state.flipH, flipV: this.state.flipV }; }
+  dims() {
+    const total = this.totalSegments(this.state.sections);
+    const width = this.gridWidth(total, this.state.rows);
+    const d = this.gridDims(width, this.state.rows, this.state.transpose);
+    return { total, width, w: d.w, h: d.h };
+  }
+
+  // ---------- device / push ----------
+  queueScene(fn) {
+    const myGen = this.sceneGen;
+    const run = this.sceneChain.then(() => (myGen === this.sceneGen ? fn() : undefined));
+    this.sceneChain = run.catch(() => {});
+    return run;
+  }
+  buildEntries(colors) {
+    const scale = this.state.brightness / 100;
+    const entries = [];
+    colors.forEach((c, p) => {
+      if (c) {
+        const [r, g, b] = this.hexToRgb(c);
+        entries.push({ seg: this.logicalToPhysical(p, this.state.sections, this.state.rows), r: Math.round(r * scale), g: Math.round(g * scale), b: Math.round(b * scale) });
+      }
+    });
+    return entries;
+  }
+  async sendFrame(logicalColors) {
+    if (!this.device || !this.device.connected) return;
+    const entries = this.buildEntries(logicalColors);
+    await this.queueScene(() => this.device.setScene(entries, { dir: 0x13, speed: this.state.speed }));
+  }
+  async push() {
+    if (this.animRunning) { this.animRunning = false; this.playbackFrames = null; this.setState({ animationId: null, previewColors: null }); }
+    if (!this.device || !this.device.connected) return;
+    if (this.pushing) { this.pendingPush = true; return; }
+    this.pushing = true; this.setState({ busy: true });
+    try {
+      do {
+        this.pendingPush = false;
+        const entries = this.buildEntries(this.state.colors);
+        await this.queueScene(() => this.device.setScene(entries, { dir: this.state.effect, speed: this.state.speed }));
+        this.setState({ status: "Pushed " + entries.length + " lit segment(s)" });
+      } while (this.pendingPush);
+    } catch (e) {
+      this.setState({ status: "Push failed: " + e.message });
+    } finally {
+      this.pushing = false; this.setState({ busy: false });
+    }
+  }
+
+  async connect() {
+    if (!window.CG) return;
+    const dev = new window.CG.GoveeDevice();
+    dev.onDisconnect = () => this.setState({ connected: false, status: "Disconnected" });
+    this.setState({ status: "Connecting…" });
+    try {
+      await dev.connect();
+      this.device = dev;
+      this.setState({ connected: true, powered: true, status: "Connected: " + dev.name });
+      await dev.powerOn();
+    } catch (e) {
+      this.setState({ status: "Connect failed: " + e.message });
+    }
+  }
+  disconnect() { if (this.device) this.device.disconnect(); this.setState({ connected: false, status: "Disconnected" }); }
+  connectToggle() { if (this.state.connected) this.disconnect(); else this.connect(); }
+  async powerToggle() {
+    if (!this.device || !this.device.connected) return;
+    const next = !this.state.powered;
+    this.setState({ powered: next });
+    try { if (next) await this.device.powerOn(); else await this.device.powerOff(); } catch (e) {}
+  }
+
+  // ---------- mutations ----------
+  setSelected(c) { this.setState({ selected: c, erasing: false }, this._persist); }
+  setErasing(v) { this.setState({ erasing: v }); }
+  selectPen() { this.setState({ erasing: false }); }
+  selectEraser() { this.setState({ erasing: true }); }
+  setSections(sections) {
+    const total = this.totalSegments(sections);
+    const colors = Array.from({ length: total }, (_, i) => this.state.colors[i] != null ? this.state.colors[i] : null);
+    this.setState({ sections, colors }, this._persist);
+  }
+  setRows(n) { this.setState({ rows: Math.max(1, Math.min(45, n || 1)) }, () => { this._persist(); this.push(); }); }
+  setBrightness(n) { this.setState({ brightness: Math.max(0, Math.min(100, Math.round(n))) }, () => { this._persist(); this.push(); }); }
+  setEffect(n) { this.setState({ effect: n }, () => { this._persist(); this.push(); }); }
+  setSpeed(n) { this.setState({ speed: Math.max(1, Math.min(100, Math.round(n))) }, () => { this._persist(); this.push(); }); }
+  toggleTranspose() { this.setState({ transpose: !this.state.transpose }, this._persist); }
+  toggleFlipH() { this.setState({ flipH: !this.state.flipH }, this._persist); }
+  toggleFlipV() { this.setState({ flipV: !this.state.flipV }, this._persist); }
+
+  addSection() { if (this.state.sections.length >= 2) return; this.setSections(this.state.sections.concat([{ length: 44, reversed: false, serpentine: false }])); }
+  removeSection(i) { if (this.state.sections.length <= 1) return; this.setSections(this.state.sections.filter((_, idx) => idx !== i)); }
+  setSectionLength(i, len) { const c = Math.max(1, Math.min(45, len || 1)); this.setSections(this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { length: c }) : s)); }
+  toggleReverse(i) { this.setState({ sections: this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { reversed: !s.reversed }) : s) }, () => { this._persist(); this.push(); }); }
+  toggleSerpentine(i) { this.setState({ sections: this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { serpentine: !s.serpentine }) : s) }, () => { this._persist(); this.push(); }); }
+
+  applyCell(logical) { const colors = this.state.colors.slice(); colors[logical] = this.state.erasing ? null : this.state.selected; this.setState({ colors }); }
+  applyDesign(next) { const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, i) => next[i] != null ? next[i] : null); this.setState({ colors }, () => this.push()); }
+  clear() {
+    this.setState({ colors: new Array(this.totalSegments(this.state.sections)).fill(null), effect: 0x13 });
+    if (this.animRunning) { this.animRunning = false; this.setState({ animationId: null, previewColors: null }); }
+    this.sceneGen++;
+    if (this.device && this.device.connected) { this.setState({ status: "Cleared" }); this.queueScene(() => this.device.setScene([], { dir: 0x13, bg: [0, 0, 0] })); }
+  }
+  fillAll() { this.setState({ colors: new Array(this.totalSegments(this.state.sections)).fill(this.state.selected) }, () => this.push()); }
+
+  buildPattern(fn) {
+    const { sections, rows, transpose, flipH, flipV, selected } = this.state;
+    const total = this.totalSegments(sections);
+    const width = this.gridWidth(total, rows);
+    const d = this.gridDims(width, rows, transpose);
+    const colors = new Array(total).fill(null);
+    for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
+      const logical = this.visualToLogical(vx, vy, width, rows, { transpose, flipH, flipV });
+      if (logical >= total) continue;
+      colors[logical] = fn(vx, vy, d.w, d.h, selected);
+    }
+    this.applyDesign(colors);
+  }
+
+  computeAnimColors(animId, frame) {
+    const anim = this.ANIMATIONS.find((a) => a.id === animId);
+    if (!anim) return null;
+    const { sections, rows, transpose, flipH, flipV, selected, colors } = this.state;
+    const total = this.totalSegments(sections);
+    const width = this.gridWidth(total, rows);
+    const d = this.gridDims(width, rows, transpose);
+    const orient = { transpose, flipH, flipV };
+    const designAt = (vx, vy) => colors[this.visualToLogical(vx, vy, width, rows, orient)] || null;
+    const ctx = { w: d.w, h: d.h, frame, selected, designAt };
+    const out = new Array(total).fill(null);
+    for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
+      const logical = this.visualToLogical(vx, vy, width, rows, orient);
+      if (logical >= total) continue;
+      out[logical] = anim.fn(vx, vy, ctx);
+    }
+    return out;
+  }
+  async runFrameLoop() {
+    while (this.animRunning) {
+      const logical = this.playbackFrames
+        ? (this.playbackFrames.length ? this.playbackFrames[this.animFrame % this.playbackFrames.length] : null)
+        : (this.state.animationId ? this.computeAnimColors(this.state.animationId, this.animFrame) : null);
+      if (!logical) break;
+      this.setState({ previewColors: logical });
+      if (this.device && this.device.connected) { try { await this.sendFrame(logical); } catch (e) {} }
+      this.animFrame++;
+      const interval = 400 - ((this.state.speed - 1) / 99) * 350;
+      await new Promise((r) => setTimeout(r, Math.max(30, interval)));
+    }
+    this.animRunning = false;
+  }
+  startAnimation(id) {
+    this.playbackFrames = null;
+    this.setState({ animationId: id });
+    this.animFrame = 0;
+    if (!this.animRunning) { this.animRunning = true; this.runFrameLoop(); }
+  }
+  playFrames(frames) {
+    if (!frames.length) return;
+    this.playbackFrames = frames;
+    this.setState({ animationId: "__frames__" });
+    this.animFrame = 0;
+    if (!this.animRunning) { this.animRunning = true; this.runFrameLoop(); }
+  }
+  stopAnimation() {
+    this.animRunning = false; this.playbackFrames = null;
+    this.setState({ animationId: null, previewColors: null }, () => this.push());
+  }
+
+  // ---------- scenes ----------
+  saveScene() { const n = this.state.sceneName.trim(); if (!n) return; const scene = { name: n, colors: this.state.colors.slice() }; this.setState({ scenes: this.state.scenes.filter((s) => s.name !== n).concat([scene]), sceneName: "" }, this._persist); }
+  loadScene(i) { const sc = this.state.scenes[i]; if (!sc) return; const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, k) => sc.colors[k] != null ? sc.colors[k] : null); this.setState({ colors }, () => this.push()); }
+  deleteScene(i) { this.setState({ scenes: this.state.scenes.filter((_, idx) => idx !== i) }, this._persist); }
+  exportScenes() {
+    const data = JSON.stringify({ app: "cloudgrid", scenes: this.state.scenes }, null, 2);
+    const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+    const a = document.createElement("a"); a.href = url; a.download = "cloudgrid-scenes.json"; a.click(); URL.revokeObjectURL(url);
+  }
+  importScenes(json) {
+    try {
+      const parsed = JSON.parse(json);
+      const incoming = Array.isArray(parsed) ? parsed : parsed.scenes;
+      if (!Array.isArray(incoming)) return;
+      const byName = new Map(this.state.scenes.map((s) => [s.name, s]));
+      for (const s of incoming) if (s && s.name && Array.isArray(s.colors)) byName.set(s.name, s);
+      this.setState({ scenes: Array.from(byName.values()) }, this._persist);
+    } catch (e) { this.setState({ status: "Import failed: invalid file" }); }
+  }
+
+  // ---------- media ----------
+  sampleOpts(extra) {
+    const d = this.dims();
+    return Object.assign({
+      fit: this.state.fit, rotate: this.state.rotate,
+      adjust: { sat: this.state.imgSat, bright: this.state.imgBright, contrast: this.state.imgContrast },
+      dims: { w: d.w, h: d.h, total: d.total, width: d.width, rows: this.state.rows, orient: this.orient(), visualToLogical: this.visualToLogical.bind(this) },
+    }, extra || {});
+  }
+  resampleImage(over) {
+    if (!this.imgEl || !window.CG) return;
+    const opts = this.sampleOpts({
+      fit: over && over.f != null ? over.f : this.state.fit,
+      rotate: over && over.r != null ? over.r : this.state.rotate,
+      adjust: { sat: over && over.sat != null ? over.sat : this.state.imgSat, bright: over && over.bright != null ? over.bright : this.state.imgBright, contrast: over && over.contrast != null ? over.contrast : this.state.imgContrast },
+    });
+    const colors = window.CG.sampleSource(this.imgEl, this.imgW, this.imgH, opts);
+    this.applyDesign(colors);
+  }
+  onChooseImage(e) {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const url = URL.createObjectURL(f); const img = new Image();
+    img.onload = () => { this.imgEl = img; this.imgW = img.naturalWidth; this.imgH = img.naturalHeight; this.resampleImage(); URL.revokeObjectURL(url); };
+    img.src = url; e.target.value = "";
+  }
+  async framesFromImage(file, opts) {
+    const Dec = window.ImageDecoder;
+    if (!Dec) throw new Error("ImageDecoder unavailable (use Chrome/Edge).");
+    const dec = new Dec({ data: await file.arrayBuffer(), type: file.type || "image/gif" });
+    await dec.tracks.ready;
+    const count = (dec.tracks.selectedTrack && dec.tracks.selectedTrack.frameCount) || 1;
+    const frames = [];
+    for (let i = 0; i < Math.min(count, 240); i++) {
+      const r = await dec.decode({ frameIndex: i });
+      frames.push(window.CG.sampleSource(r.image, r.image.displayWidth, r.image.displayHeight, opts));
+      r.image.close();
+    }
+    return frames;
+  }
+  async framesFromVideo(file, opts) {
+    const url = URL.createObjectURL(file);
+    try {
+      const video = document.createElement("video"); video.src = url; video.muted = true;
+      await new Promise((res, rej) => { video.onloadedmetadata = () => res(); video.onerror = () => rej(new Error("could not load video")); });
+      const step = 1 / 6; const frames = [];
+      for (let t = 0; t < video.duration && frames.length < 240; t += step) {
+        video.currentTime = t;
+        await new Promise((res) => { video.onseeked = () => res(); });
+        frames.push(window.CG.sampleSource(video, video.videoWidth, video.videoHeight, opts));
+      }
+      return frames;
+    } finally { URL.revokeObjectURL(url); }
+  }
+  async onChooseMedia(e) {
+    const file = e.target.files && e.target.files[0]; e.target.value = ""; if (!file || !window.CG) return;
+    const opts = this.sampleOpts({ fit: "cover", rotate: false, adjust: { sat: 160, bright: 100, contrast: 110 } });
+    this.setState({ mediaStatus: "Decoding…" });
+    try {
+      const frames = file.type.indexOf("video/") === 0 ? await this.framesFromVideo(file, opts) : await this.framesFromImage(file, opts);
+      if (!frames.length) { this.setState({ mediaStatus: "No frames found" }); return; }
+      this.setState({ mediaStatus: "Playing " + frames.length + " frames" });
+      this.playFrames(frames);
+    } catch (err) { this.setState({ mediaStatus: "Failed: " + err.message }); }
+  }
+
+  // ---------- AI ----------
+  async generateAI() {
+    const prompt = this.state.aiPrompt.trim();
+    if (!prompt || this.state.aiBusy) return;
+    const d = this.dims();
+    this.setState({ aiBusy: true, aiStatus: "Generating…" });
+    try {
+      const res = await fetch("/api/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt, width: d.w, height: d.h }) });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || ("HTTP " + res.status));
+      const grid = data.grid;
+      const colors = new Array(d.total).fill(null);
+      for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
+        const logical = this.visualToLogical(vx, vy, d.width, this.state.rows, this.orient());
+        if (logical >= d.total) continue;
+        colors[logical] = (grid && grid[vy] && grid[vy][vx]) || null;
+      }
+      this.applyDesign(colors);
+      this.setState({ aiStatus: "Done" });
+    } catch (e) { this.setState({ aiStatus: "Failed: " + e.message }); }
+    finally { this.setState({ aiBusy: false }); }
+  }
+
+  // ---------- ui ----------
+  toggleMenu(m) { this.setState({ openMenu: this.state.openMenu === m ? null : m }); }
+  closeMenus() { this.setState({ openMenu: null }); }
+  setTool(t) { this.setState({ tool: t }); }
+  startDrag(e, key, sign) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = this.state[key];
+    const min = 240, max = 560;
+    const move = (ev) => {
+      const next = Math.max(min, Math.min(max, startW + sign * (ev.clientX - startX)));
+      this.setState({ [key]: next });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.userSelect = "";
+      this._measure && this._measure();
+    };
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+  toggleSection(k) { this.setState({ expanded: Object.assign({}, this.state.expanded, { [k]: !this.state.expanded[k] }) }); }
+  toggleIndices() { this.setState({ showIndices: !this.state.showIndices, openMenu: null }); }
+  openCtx(e, logical) { e.preventDefault(); this.setState({ ctx: { x: e.clientX, y: e.clientY, logical }, openMenu: null }); }
+  closeCtx() { this.setState({ ctx: null }); }
+  ctxAct(fn) { fn(); this.setState({ ctx: null }); this.push(); }
+  fillSection(logical, color) {
+    const si = this.sectionOfLogical(logical, this.state.sections);
+    const colors = this.state.colors.slice();
+    let offset = 0;
+    for (let i = 0; i < this.state.sections.length; i++) {
+      const len = this.state.sections[i].length;
+      if (i === si) { for (let k = offset; k < offset + len; k++) colors[k] = color; break; }
+      offset += len;
+    }
+    this.setState({ colors });
+  }
+
+  // ---------- styles ----------
+  _dockBtn(active) {
+    return {
+      display: "flex", alignItems: "center", justifyContent: "center",
+      width: "34px", height: "34px", borderRadius: "9px", cursor: "pointer", padding: 0,
+      background: active ? "#34cf6b" : "#181c23",
+      color: active ? "#06210f" : "#aeb6c2",
+      border: "1px solid " + (active ? "#3ad876" : "#2a313b"),
+    };
+  }
+  _btn(active, opts) {
+    opts = opts || {};
+    return Object.assign({
+      font: "inherit", fontSize: opts.fs || "12px", fontWeight: 500,
+      padding: opts.pad || "7px 11px", borderRadius: "7px", cursor: "pointer",
+      background: active ? "rgba(52,207,107,0.14)" : "#181c23",
+      color: active ? "#7ee6a3" : "#cfd6e0",
+      border: "1px solid " + (active ? "rgba(52,207,107,0.5)" : "#262b33"),
+      whiteSpace: "nowrap", transition: "background .1s, border-color .1s, color .1s",
+    }, opts.extra || {});
+  }
+
+  renderVals() {
+    const st = this.state;
+    const d = this.dims();
+    const src = st.previewColors || st.colors;
+    const litCount = st.colors.filter(Boolean).length;
+    const layout = st.layout;
+
+    // ---- layout region styles (studio) ----
+    let workspaceStyle, panelStyle, panelInnerStyle, canvasAreaStyle, inspectorStyle;
+    const panelChrome = { display: "flex", flexDirection: "column", minHeight: 0, background: "#0e1116" };
+    const inspectorBase = { display: "flex", flexDirection: "column", gap: "12px", padding: "13px", overflow: "auto" };
+    workspaceStyle = { display: "grid", gridTemplateColumns: st.panelW + "px 7px minmax(0,1fr) 7px " + st.inspectorW + "px", gridTemplateRows: "minmax(0,1fr)", flex: 1, minHeight: 0 };
+    panelStyle = Object.assign({}, panelChrome, { borderRight: "1px solid #1e232b" });
+    panelInnerStyle = { display: "flex", flexDirection: "column", gap: 0, padding: 0, overflow: "auto" };
+    canvasAreaStyle = { display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, background: "#0a0c10" };
+    inspectorStyle = Object.assign({}, inspectorBase, { borderLeft: "1px solid #1e232b", background: "#0e1116" });
+
+    // ---- cards ----
+    const cardStyle = { background: "#161a21", border: "1px solid #232932", borderRadius: "10px", padding: "12px", display: "flex", flexDirection: "column", gap: "10px", width: "100%" };
+    const cardHead = { fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "#7a8494" };
+    const btnGhost = this._btn(false);
+    const btnPrimary = { font: "inherit", fontSize: "12px", fontWeight: 600, padding: "8px 12px", borderRadius: "7px", cursor: "pointer", background: "#34cf6b", color: "#06210f", border: "1px solid #3ad876", whiteSpace: "nowrap" };
+    const btnPrimaryGhost = { font: "inherit", fontSize: "12px", fontWeight: 500, padding: "8px 12px", borderRadius: "7px", cursor: "pointer", background: "rgba(52,207,107,0.12)", color: "#7ee6a3", border: "1px solid rgba(52,207,107,0.4)", textAlign: "center", display: "block" };
+
+    // ---- tabs ----
+    const tabs = this.TABS.map((t) => ({
+      label: t.label, onClick: () => this.setTool(t.key),
+      style: {
+        font: "inherit", fontSize: "12px", fontWeight: 500, padding: "6px 10px", borderRadius: "6px", cursor: "pointer", whiteSpace: "nowrap",
+        background: st.tool === t.key ? "rgba(52,207,107,0.14)" : "transparent",
+        color: st.tool === t.key ? "#7ee6a3" : "#8b94a3",
+        border: "1px solid " + (st.tool === t.key ? "rgba(52,207,107,0.4)" : "transparent"),
+      },
+    }));
+
+    // ---- collapsible sections ----
+    const exp = st.expanded;
+    const secWrap = { borderBottom: "1px solid #1b1f26" };
+    const secBody = { padding: "0 13px 14px", display: "flex", flexDirection: "column", gap: "10px" };
+    const secHead = (open) => ({ display: "flex", alignItems: "center", gap: "9px", width: "100%", padding: "11px 13px", background: open ? "#12161c" : "transparent", border: "none", borderRadius: 0, cursor: "pointer", color: open ? "#e6e9ef" : "#aeb6c2", font: "inherit", fontSize: "11.5px", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" });
+    const secChev = (open) => ({ display: "inline-block", transition: "transform .15s ease", transform: open ? "rotate(90deg)" : "rotate(0deg)", color: "#5d6675", fontSize: "13px", width: "10px", flex: "none" });
+    const headPaint = secHead(exp.paint), chevPaint = secChev(exp.paint), tPaint = () => this.toggleSection("paint");
+    const headPatterns = secHead(exp.patterns), chevPatterns = secChev(exp.patterns), tPatterns = () => this.toggleSection("patterns");
+    const headEffects = secHead(exp.effects), chevEffects = secChev(exp.effects), tEffects = () => this.toggleSection("effects");
+    const headAnimate = secHead(exp.animate), chevAnimate = secChev(exp.animate), tAnimate = () => this.toggleSection("animate");
+    const headImport = secHead(exp.import), chevImport = secChev(exp.import), tImport = () => this.toggleSection("import");
+    const headAi = secHead(exp.ai), chevAi = secChev(exp.ai), tAi = () => this.toggleSection("ai");
+    const headScenes = secHead(exp.scenes), chevScenes = secChev(exp.scenes), tScenes = () => this.toggleSection("scenes");
+    const headCalibrate = secHead(exp.calibrate), chevCalibrate = secChev(exp.calibrate), tCalibrate = () => this.toggleSection("calibrate");
+    const headHelp = secHead(exp.help), chevHelp = secChev(exp.help), tHelp = () => this.toggleSection("help");
+
+    // ---- swatches ----
+    const swatches = this.SWATCHES.map((c) => ({
+      color: c, onClick: () => this.setSelected(c),
+      style: { width: "28px", height: "28px", padding: 0, borderRadius: "7px", cursor: "pointer", background: c, border: (st.selected === c && !st.erasing) ? "2px solid #fff" : "2px solid #2a2f38", boxShadow: "0 0 0 1px #0e1116" },
+    }));
+
+    // ---- cells ---- (fill the measured canvas viewport)
+    const padW = 48, padH = 48, minGap = 2, maxGap = 4;
+    const availW = Math.max(120, (st.viewportW || 760) - padW);
+    const availH = Math.max(120, (st.viewportH || 560) - padH);
+    // solve cell size so that w*(cell+gap) fits; gap scales with cell
+    const fitW = availW / d.w, fitH = availH / d.h;
+    let cell = Math.floor(Math.min(fitW, fitH));
+    cell = Math.max(12, Math.min(72, cell - maxGap));
+    const gap = cell > 26 ? maxGap : cell > 16 ? 3 : minGap;
+    const rad = cell > 22 ? "6px" : cell > 16 ? "5px" : "3px";
+    const cells = [];
+    for (let k = 0; k < d.w * d.h; k++) {
+      const vy = Math.floor(k / d.w), vx = k % d.w;
+      const logical = this.visualToLogical(vx, vy, d.width, this.state.rows, this.orient());
+      const exists = logical < d.total;
+      const c = exists ? src[logical] : null;
+      const banded = exists && (this.sectionOfLogical(logical, st.sections) % 2 === 1);
+      let style;
+      if (!exists) style = { width: "100%", height: "100%", borderRadius: rad, background: "transparent", border: "1px solid transparent", cursor: "default" };
+      else if (c) style = { width: "100%", height: "100%", borderRadius: rad, background: c, border: "1px solid rgba(0,0,0,0.5)", boxShadow: "0 0 " + Math.round(cell * 0.55) + "px " + c + ", inset 0 0 2px rgba(255,255,255,0.3)", cursor: "crosshair", display: "flex", alignItems: "center", justifyContent: "center" };
+      else style = { width: "100%", height: "100%", borderRadius: rad, background: banded ? "#13171e" : "#0f141a", border: "1px solid #1b212a", boxShadow: banded ? "inset 0 0 0 9999px rgba(52,207,107,0.045)" : "none", cursor: "crosshair", display: "flex", alignItems: "center", justifyContent: "center" };
+      cells.push({
+        key: k, idx: logical, showIdx: exists && st.showIndices, style,
+        onDown: exists ? ((e) => { if (e.button === 2) return; e.preventDefault(); this.painting = true; this.applyCell(logical); }) : (() => {}),
+        onEnter: exists ? (() => { if (this.painting) this.applyCell(logical); }) : (() => {}),
+        onCtx: exists ? ((e) => this.openCtx(e, logical)) : ((e) => e.preventDefault()),
+      });
+    }
+    const gridStyle = { display: "grid", gridTemplateColumns: "repeat(" + d.w + ", " + cell + "px)", gridAutoRows: cell + "px", gap: gap + "px" };
+
+    // ---- menu styling ----
+    const menuBtn = (open) => ({ font: "inherit", fontSize: "13px", fontWeight: 500, padding: "6px 11px", borderRadius: "7px", cursor: "pointer", background: open ? "#1b2027" : "transparent", color: open ? "#e6e9ef" : "#aeb6c2", border: "1px solid " + (open ? "#2a313b" : "transparent") });
+    const dropStyle = { position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: "212px", background: "#14181e", border: "1px solid #2a313b", borderRadius: "9px", padding: "5px", boxShadow: "0 16px 44px rgba(0,0,0,0.55)", zIndex: 60, display: "flex", flexDirection: "column", gap: "1px" };
+    const dropItem = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", font: "inherit", fontSize: "12.5px", fontWeight: 500, padding: "7px 9px", borderRadius: "6px", cursor: "pointer", background: "transparent", color: "#cfd6e0", border: "none", textAlign: "left", width: "100%", whiteSpace: "nowrap" };
+
+    const effectName = (this.EFFECTS.find((e) => e.dir === st.effect) || { label: "Custom" }).label;
+    const statusDot = { width: "9px", height: "9px", borderRadius: "50%", flex: "none", background: st.connected ? "#34cf6b" : "#5d6675", boxShadow: st.connected ? "0 0 7px #34cf6b" : "none" };
+
+    const sliderRow = { display: "flex", alignItems: "center", gap: "10px" };
+    const sliderLab = { fontSize: "11.5px", color: "#8b94a3", width: "74px", flex: "none" };
+    const sliderVal = { fontFamily: "'JetBrains Mono',monospace", fontSize: "11.5px", color: "#aeb6c2", width: "40px", textAlign: "right", flex: "none" };
+    const numInput = { font: "inherit", fontFamily: "'JetBrains Mono',monospace", fontSize: "12px", width: "62px", background: "#0b0d10", color: "#e6e9ef", border: "1px solid #2a313b", borderRadius: "6px", padding: "6px 8px" };
+    const numInputSm = Object.assign({}, numInput, { width: "52px", padding: "5px 7px" });
+    const textInput = { font: "inherit", fontSize: "12.5px", flex: 1, background: "#0b0d10", color: "#e6e9ef", border: "1px solid #2a313b", borderRadius: "7px", padding: "8px 10px" };
+    const statRow = { display: "flex", alignItems: "center", justifyContent: "space-between" };
+    const statLab = { fontSize: "12px", color: "#8b94a3" };
+    const statVal = { fontFamily: "'JetBrains Mono',monospace", fontSize: "12.5px", color: "#cfd6e0" };
+    const chipBtn = { font: "inherit", fontSize: "11.5px", fontWeight: 500, padding: "4px 9px", borderRadius: "6px", cursor: "pointer", background: "#1b2027", color: "#cfd6e0", border: "1px solid #2a313b" };
+    const chipBtnX = { font: "inherit", fontSize: "11px", padding: "4px 7px", borderRadius: "6px", cursor: "pointer", background: "transparent", color: "#8b94a3", border: "1px solid #2a313b" };
+    const checkMark = (on) => ({ visibility: on ? "visible" : "hidden", color: "#34cf6b", fontSize: "11px" });
+
+    const ctx = st.ctx;
+    const ctxStyle = ctx ? { position: "fixed", left: Math.min(ctx.x, (window.innerWidth || 1200) - 230) + "px", top: Math.min(ctx.y, (window.innerHeight || 800) - 250) + "px", width: "212px", background: "#14181e", border: "1px solid #2a313b", borderRadius: "9px", padding: "5px", boxShadow: "0 16px 44px rgba(0,0,0,0.6)", zIndex: 60, display: "flex", flexDirection: "column", gap: "1px" } : {};
+    const ctxColor = ctx ? src[ctx.logical] : null;
+
+    return {
+      // layout
+      workspaceStyle, panelStyle, panelInnerStyle, canvasAreaStyle, inspectorStyle,
+      cardStyle, cardHead, btnGhost, btnPrimary, btnPrimaryGhost,
+      // status / device
+      status: st.status, busy: st.busy, connected: st.connected,
+      connectLabel: st.connected ? "Disconnect" : "Connect device",
+      deviceLine: st.connected ? ((this.device && this.device.name) || "Connected") : "No device connected",
+      statusDot,
+      connectBtn: Object.assign({}, btnPrimary, st.connected ? { background: "#1b2027", color: "#cfd6e0", border: "1px solid #2a313b" } : {}),
+      connectBtnSm: Object.assign({}, this._btn(false), { flex: 1, textAlign: "center", background: st.connected ? "#181c23" : "rgba(52,207,107,0.14)", color: st.connected ? "#cfd6e0" : "#7ee6a3", borderColor: st.connected ? "#262b33" : "rgba(52,207,107,0.5)" }),
+      powerBtn: Object.assign({}, this._btn(st.connected && st.powered), { opacity: st.connected ? 1 : 0.45 }),
+      pushBtn: Object.assign({}, btnPrimary, { textAlign: "center", opacity: st.connected ? 1 : 0.45 }),
+      mConnect: () => this.connectToggle(), mPower: () => this.powerToggle(), mPush: () => this.push(),
+      // menus
+      menu: { file: st.openMenu === "file", edit: st.openMenu === "edit", view: st.openMenu === "view", device: st.openMenu === "device", help: st.openMenu === "help" },
+      anyMenu: st.openMenu != null,
+      toggleFile: () => this.toggleMenu("file"), toggleEdit: () => this.toggleMenu("edit"), toggleView: () => this.toggleMenu("view"), toggleDevice: () => this.toggleMenu("device"), toggleHelp: () => this.toggleMenu("help"),
+      closeMenus: () => this.closeMenus(),
+      menuBtnFile: menuBtn(st.openMenu === "file"), menuBtnEdit: menuBtn(st.openMenu === "edit"), menuBtnView: menuBtn(st.openMenu === "view"), menuBtnDevice: menuBtn(st.openMenu === "device"), menuBtnHelp: menuBtn(st.openMenu === "help"),
+      helpDropStyle: { position: "absolute", top: "calc(100% + 6px)", right: 0, width: "288px", background: "#14181e", border: "1px solid #2a313b", borderRadius: "9px", padding: "5px", boxShadow: "0 16px 44px rgba(0,0,0,0.55)", zIndex: 60 },
+      dropStyle, dropItem, kbd: { fontFamily: "'JetBrains Mono',monospace", fontSize: "11px", color: "#5d6675" },
+      mNew: () => { this.clear(); this.closeMenus(); },
+      mSave: () => { this.setState({ tool: "scenes", openMenu: null }); },
+      mExport: () => { this.exportScenes(); this.closeMenus(); },
+      mFill: () => { this.fillAll(); this.closeMenus(); },
+      mClear: () => { this.clear(); this.closeMenus(); },
+      mEraser: () => { this.setErasing(!st.erasing); this.closeMenus(); },
+      erMark: checkMark(st.erasing), ixMark: checkMark(st.showIndices), tpMark: checkMark(st.transpose), fhMark: checkMark(st.flipH), fvMark: checkMark(st.flipV),
+      mIndices: () => this.toggleIndices(), mTranspose: () => { this.toggleTranspose(); this.closeMenus(); }, mFlipH: () => { this.toggleFlipH(); this.closeMenus(); }, mFlipV: () => { this.toggleFlipV(); this.closeMenus(); },
+      // collapsible sections
+      expanded: st.expanded, secWrap, secBody,
+      headPaint, chevPaint, tPaint, headPatterns, chevPatterns, tPatterns, headEffects, chevEffects, tEffects, headAnimate, chevAnimate, tAnimate, headImport, chevImport, tImport, headAi, chevAi, tAi, headScenes, chevScenes, tScenes, headCalibrate, chevCalibrate, tCalibrate, headHelp, chevHelp, tHelp,
+      shortcuts: [
+        { keys: ["B"], label: "Brush tool" },
+        { keys: ["E", "X"], label: "Eraser tool" },
+        { keys: ["C"], label: "Open color picker" },
+        { keys: ["F"], label: "Fill all with color" },
+        { keys: ["I"], label: "Toggle segment indices" },
+        { keys: ["1", "\u2013", "9"], label: "Pick palette swatch" },
+        { keys: ["Esc"], label: "Close menus" },
+      ].map((s) => ({ label: s.label, keys: s.keys.map((k) => ({ k })) })),
+      kbdChip: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "6px", background: "#0b0d10", border: "1px solid #2a313b", borderBottomWidth: "2px", fontFamily: "'JetBrains Mono',monospace", fontSize: "11px", fontWeight: 600, color: "#cfd6e0" },
+      // paint
+      selected: st.selected, selectedUpper: st.selected.toUpperCase(), onColorInput: (e) => this.setSelected(e.target.value),
+      swatches, eraserBtn: this._btn(st.erasing),
+      // floating dock
+      selectPen: () => this.selectPen(), selectEraser: () => this.selectEraser(),
+      colorInputRef: (el) => { this._colorInput = el; },
+      penBtn: this._dockBtn(!st.erasing), eraserToolBtn: this._dockBtn(st.erasing),
+      colorToolBtn: { position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "9px", cursor: "pointer", background: "#181c23", border: "1px solid #2a313b", overflow: "hidden" },
+      colorToolSwatch: { width: "20px", height: "20px", borderRadius: "6px", background: st.selected, boxShadow: "0 0 0 1px rgba(0,0,0,0.4), 0 0 10px " + st.selected, pointerEvents: "none" },
+      // patterns
+      patterns: this.PATTERNS.map((p) => ({ label: p.label, onClick: () => this.buildPattern(p.fn) })),
+      // effects
+      effects: this.EFFECTS.map((e) => ({ label: e.label, style: this._btn(st.effect === e.dir), onClick: () => this.setEffect(e.dir) })),
+      effect: st.effect, effectHex: "0x" + st.effect.toString(16).padStart(2, "0"), effectName,
+      onEffectByte: (e) => this.setEffect(Number(e.target.value)), numInput, numInputSm,
+      // animate
+      anims: this.ANIMATIONS.map((a) => ({ label: a.label, style: this._btn(st.animationId === a.id), onClick: () => this.startAnimation(a.id) })),
+      stopAnim: () => this.stopAnimation(), animating: st.animationId != null,
+      // import
+      fits: ["contain", "cover", "stretch"].map((f) => ({ label: f, style: this._btn(st.fit === f), onClick: () => { this.setState({ fit: f }, () => this.resampleImage({ f })); } })),
+      rotateBtn: this._btn(st.rotate),
+      toggleRotate: () => { const r = !st.rotate; this.setState({ rotate: r }, () => this.resampleImage({ r })); },
+      imgSat: st.imgSat, imgBright: st.imgBright, imgContrast: st.imgContrast,
+      onImgSat: (e) => { const v = Number(e.target.value); this.setState({ imgSat: v }, () => this.resampleImage({ sat: v })); },
+      onImgBright: (e) => { const v = Number(e.target.value); this.setState({ imgBright: v }, () => this.resampleImage({ bright: v })); },
+      onImgContrast: (e) => { const v = Number(e.target.value); this.setState({ imgContrast: v }, () => this.resampleImage({ contrast: v })); },
+      onChooseImage: (e) => this.onChooseImage(e), onChooseMedia: (e) => this.onChooseMedia(e), mediaStatus: st.mediaStatus,
+      orient: d.w > d.h ? "landscape" : d.w < d.h ? "portrait" : "square",
+      sliderRow, sliderLab, sliderVal, textInput,
+      // ai
+      aiPrompt: st.aiPrompt, onAiPrompt: (e) => this.setState({ aiPrompt: e.target.value }), onAiKey: (e) => { if (e.key === "Enter") this.generateAI(); },
+      generateAI: () => this.generateAI(), aiStatus: st.aiStatus, aiBtnLabel: st.aiBusy ? "Generating…" : "Generate",
+      // scenes
+      sceneName: st.sceneName, onSceneName: (e) => this.setState({ sceneName: e.target.value }), onSceneKey: (e) => { if (e.key === "Enter") this.saveScene(); },
+      saveScene: () => this.saveScene(),
+      scenes: st.scenes.map((s, i) => ({ name: s.name, lit: s.colors.filter(Boolean).length, onLoad: () => this.loadScene(i), onDelete: () => this.deleteScene(i) })),
+      sceneCount: st.scenes.length, hasScenes: st.scenes.length > 0, noScenes: st.scenes.length === 0,
+      onImportScenes: async (e) => { const f = e.target.files && e.target.files[0]; if (f) this.importScenes(await f.text()); e.target.value = ""; },
+      chipBtn, chipBtnX,
+      // calibrate
+      rows: st.rows, onRows: (e) => this.setRows(Number(e.target.value)),
+      transposeBtn: this._btn(st.transpose), flipHBtn: this._btn(st.flipH), flipVBtn: this._btn(st.flipV),
+      addSection: () => this.addSection(), addBtn: this._btn(false, { fs: "11.5px", pad: "5px 9px" }),
+      sections: st.sections.map((s, i) => ({ num: i + 1, length: s.length, canRemove: st.sections.length > 1, revStyle: this._btn(s.reversed, { fs: "11.5px", pad: "5px 9px" }), snakeStyle: this._btn(s.serpentine, { fs: "11.5px", pad: "5px 9px" }), onLen: (e) => this.setSectionLength(i, Number(e.target.value)), onReverse: () => this.toggleReverse(i), onSnake: () => this.toggleSerpentine(i), onRemove: () => this.removeSection(i) })),
+      // canvas
+      cells, gridStyle, gridW: d.w, gridH: d.h, total: d.total, litCount,
+      canvasViewport: (el) => { this._viewport = el; if (el && this._ro) { this._ro.observe(el); this._measure && this._measure(); } },
+      splitterLeft: { gridColumn: "2", gridRow: "1", cursor: "col-resize", background: "#0e1116", borderRight: "1px solid #1e232b", borderLeft: "1px solid #1e232b", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 },
+      splitterRight: { gridColumn: "4", gridRow: "1", cursor: "col-resize", background: "#0e1116", borderRight: "1px solid #1e232b", borderLeft: "1px solid #1e232b", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 },
+      splitterGrip: { width: "2px", height: "34px", borderRadius: "2px", background: "#2c333d" },
+      startDragPanel: (e) => this.startDrag(e, "panelW", 1),
+      startDragInspector: (e) => this.startDrag(e, "inspectorW", -1),
+      idxBtn: this._btn(st.showIndices, { fs: "11.5px", pad: "5px 10px" }),
+      // inspector
+      brightness: st.brightness, onBright: (e) => this.setBrightness(Number(e.target.value)),
+      speed: st.speed, onSpeed: (e) => this.setSpeed(Number(e.target.value)),
+      statRow, statLab, statVal, sceneSectionCount: st.sections.length,
+      // context menu
+      ctxOpen: ctx != null, ctxStyle, closeCtx: () => this.closeCtx(),
+      ctxSwatchBg: { background: st.selected },
+      ctxPaint: () => this.ctxAct(() => { const cs = this.state.colors.slice(); cs[ctx.logical] = st.selected; this.setState({ colors: cs }); }),
+      ctxErase: () => this.ctxAct(() => { const cs = this.state.colors.slice(); cs[ctx.logical] = null; this.setState({ colors: cs }); }),
+      ctxEyedrop: () => { if (ctxColor) this.setSelected(ctxColor); this.setState({ ctx: null }); },
+      ctxFillSection: () => this.ctxAct(() => this.fillSection(ctx.logical, st.selected)),
+      ctxClearSection: () => this.ctxAct(() => this.fillSection(ctx.logical, null)),
+    };
+  }
+}
+</script>
+</body>
+</html>
