@@ -2,43 +2,13 @@
 // continuous payload so the per-segment color encoding is legible.
 //
 // Run: bun tools/a3.ts captures/capture3.log
+import { readBtsnoop, hex } from "./btsnoop.ts";
 
 const path = process.argv[2];
 if (!path) { console.error("usage: bun tools/a3.ts <btsnoop.log>"); process.exit(1); }
 
-const buf = new Uint8Array(await Bun.file(path).arrayBuffer());
-const dv = new DataView(buf.buffer);
-const isH4 = dv.getUint32(12, false) === 1002;
-
-// Extract ATT-write values in order.
-const writes: Uint8Array[] = [];
-let off = 16;
-while (off + 24 <= buf.length) {
-  const incl = dv.getUint32(off + 4, false);
-  off += 24;
-  if (off + incl > buf.length) break;
-  const pkt = buf.subarray(off, off + incl);
-  off += incl;
-  let p = 0;
-  if (isH4) { if (pkt[p++] !== 0x02) continue; }
-  if (p + 4 > pkt.length) continue;
-  p += 2;
-  const aclLen = pkt[p] | (pkt[p + 1] << 8); p += 2;
-  if (p + 4 > pkt.length) continue;
-  p += 2;
-  const cid = pkt[p] | (pkt[p + 1] << 8); p += 2;
-  if (cid !== 0x0004) continue;
-  if (p >= pkt.length) continue;
-  const opcode = pkt[p++];
-  if (opcode !== 0x52 && opcode !== 0x12) continue;
-  if (p + 2 > pkt.length) continue;
-  p += 2;
-  const val = pkt.subarray(p);
-  if (val.length) writes.push(new Uint8Array(val));
-}
-
-const hex = (b: number[] | Uint8Array) =>
-  Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join(" ");
+// Ordered ATT-write payloads (the raw Govee packets) from the shared parser.
+const writes: Uint8Array[] = readBtsnoop(new Uint8Array(await Bun.file(path).arrayBuffer())).map((w) => w.value);
 
 // Group a3 streams: a3 00 starts one, a3 ff ends it.
 const groups: Uint8Array[][] = [];
@@ -55,8 +25,11 @@ for (let i = 0; i < groups.length; i++) {
   const g = groups[i];
   const payload: number[] = [];
   for (const v of g) for (let k = 2; k <= 18; k++) payload.push(v[k]);
+  // Trim trailing zero padding, but never past the 10-byte header+count — an
+  // empty scene has count=0 (a legitimate zero byte at index 9) that must
+  // survive, or `count` parses as undefined.
   let end = payload.length;
-  while (end > 9 && payload[end - 1] === 0) end--;
+  while (end > 10 && payload[end - 1] === 0) end--;
   const p = payload.slice(0, end);
 
   const header = p.slice(0, 9);

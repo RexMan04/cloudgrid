@@ -1,6 +1,7 @@
 // CloudGrid core — Govee H703B BLE protocol + image sampler.
-// Ported from the original CloudGrid source (src/govee/*, src/sampler.ts) so the
-// redesigned UI controls real hardware in Chrome/Edge/Brave (Web Bluetooth).
+// Self-contained, no build step: the packet encoder, BLE device wrapper, and
+// image/video sampler that let the UI drive real hardware in Chrome/Edge/Brave
+// (Web Bluetooth). Reverse-engineering tools that informed it live in tools/.
 (function () {
   "use strict";
 
@@ -64,6 +65,7 @@
   // ---- ble.ts --------------------------------------------------------------
   const SERVICE = "00010203-0405-0607-0809-0a0b0c0d1910";
   const WRITE_CHAR = "00010203-0405-0607-0809-0a0b0c0d2b11";
+  const LAST_DEVICE_KEY = "cloudgrid-device-id";
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   class GoveeDevice {
@@ -72,7 +74,10 @@
       this.writeChar = null;
       this.keepAlive = null;
       this.chain = Promise.resolve();
-      this.onDisconnect = null;
+      this.onDisconnect = null; // called with (intentional) on any drop
+      this.onReconnect = null; // called when an auto-reconnect succeeds
+      this._wantDisconnect = false;
+      this._reconnecting = false;
     }
     get connected() {
       return !!this.writeChar;
@@ -80,35 +85,74 @@
     get name() {
       return (this.device && this.device.name) || "(unknown)";
     }
+    // Pick a device via the browser chooser (requires a user gesture).
     async connect() {
       if (!navigator.bluetooth) {
         throw new Error("Web Bluetooth unavailable. Use Chrome/Edge (or enable the flag in Brave).");
       }
-      this.device = await navigator.bluetooth.requestDevice({
+      const device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: [SERVICE],
       });
-      this.device.addEventListener("gattserverdisconnected", () => {
+      await this._attach(device);
+    }
+    // Reconnect to the last granted device without showing the chooser (no user
+    // gesture needed). Returns true if it connected, false if there's nothing to
+    // reconnect to. Used to auto-connect on page load.
+    async connectKnown() {
+      if (!navigator.bluetooth || !navigator.bluetooth.getDevices) return false;
+      let id = null;
+      try { id = localStorage.getItem(LAST_DEVICE_KEY); } catch (e) {}
+      if (!id) return false;
+      let devices = [];
+      try { devices = await navigator.bluetooth.getDevices(); } catch (e) { return false; }
+      const device = devices.find((d) => d.id === id);
+      if (!device) return false;
+      await this._attach(device);
+      return true;
+    }
+    async _attach(device) {
+      this.device = device;
+      this._wantDisconnect = false;
+      try { localStorage.setItem(LAST_DEVICE_KEY, device.id); } catch (e) {}
+      device.addEventListener("gattserverdisconnected", () => {
         this.stopKeepAlive();
         this.writeChar = null;
-        if (this.onDisconnect) this.onDisconnect();
+        if (this.onDisconnect) this.onDisconnect(this._wantDisconnect);
+        this._autoReconnect();
       });
-
+      await this._openGatt();
+    }
+    async _openGatt() {
       let server;
+      // BLE on Windows often fails the first connect; retry a few times.
       for (let attempt = 1; attempt <= 4; attempt++) {
-        try {
-          server = await this.device.gatt.connect();
-          break;
-        } catch (e) {
-          if (attempt === 4) throw e;
-          await sleep(600);
-        }
+        try { server = await this.device.gatt.connect(); break; }
+        catch (e) { if (attempt === 4) throw e; await sleep(600); }
       }
       const svc = await server.getPrimaryService(SERVICE);
       this.writeChar = await svc.getCharacteristic(WRITE_CHAR);
       this.startKeepAlive();
     }
+    // After an unexpected drop, keep retrying GATT (backoff) until it comes back
+    // or the user disconnects on purpose.
+    async _autoReconnect() {
+      if (this._reconnecting || this._wantDisconnect) return;
+      this._reconnecting = true;
+      for (let n = 1; n <= 30 && !this._wantDisconnect; n++) {
+        await sleep(Math.min(8000, 1000 * n));
+        if (this._wantDisconnect) break;
+        try {
+          await this._openGatt();
+          this._reconnecting = false;
+          if (this.onReconnect) this.onReconnect();
+          return;
+        } catch (e) { /* still down; keep trying */ }
+      }
+      this._reconnecting = false;
+    }
     disconnect() {
+      this._wantDisconnect = true;
       this.stopKeepAlive();
       if (this.device && this.device.gatt) this.device.gatt.disconnect();
       this.writeChar = null;
@@ -211,5 +255,116 @@
     return colors;
   }
 
-  window.CG = { GoveeDevice, buildSceneLeadings, buildPacket, COMMIT, sampleSource };
+  // ---- pure helpers (color / grid math / palette / shapes) -----------------
+  // Extracted from the UI component so they can be unit-tested in isolation and
+  // reused. The component keeps thin wrappers that delegate here, so its call
+  // sites are unchanged. These are all pure: no DOM, no component state.
+  function hexToRgb(hex) {
+    return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+  }
+  function hslHex(h, s, l) {
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => { const k = (n + h * 12) % 12; const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); return Math.round(255 * c).toString(16).padStart(2, "0"); };
+    return "#" + f(0) + f(8) + f(4);
+  }
+  function dim(hex, t) {
+    const [r, g, b] = hexToRgb(hex);
+    return "#" + [r, g, b].map((x) => Math.round(x * t).toString(16).padStart(2, "0")).join("");
+  }
+  function lerpHex(a, b, t) {
+    const x = hexToRgb(a), y = hexToRgb(b);
+    const m = (i) => Math.round(x[i] + (y[i] - x[i]) * t).toString(16).padStart(2, "0");
+    return "#" + m(0) + m(1) + m(2);
+  }
+  // Split a color into a full-value "base" hue + a 0..1 value (brightness):
+  // scale the brightest channel up to 255 for the base, and report that channel
+  // as the value. A dark/muddy pick (e.g. a dim brown-red) becomes a vivid base
+  // color plus a low brightness, matching the app's color-plus-brightness model.
+  // base × value reproduces the original color, so it's a lossless re-split.
+  function decomposeColor(hex) {
+    const [r, g, b] = hexToRgb(hex);
+    const m = Math.max(r, g, b);
+    if (m === 0) return { base: "#000000", value: 0 };
+    const s = 255 / m;
+    const h2 = (x) => Math.min(255, Math.round(x * s)).toString(16).padStart(2, "0");
+    return { base: "#" + h2(r) + h2(g) + h2(b), value: m / 255 };
+  }
+
+  // Section/grid layout math. A "logical" index is position along the strip;
+  // "visual" is on-screen (vx,vy); "physical" is the wired LED order.
+  function totalSegments(sections) { return sections.reduce((a, s) => a + s.length, 0); }
+  function gridWidth(total, rows) { return Math.max(1, Math.ceil(total / Math.max(1, rows))); }
+  function gridDims(width, rows, transpose) { return transpose ? { w: rows, h: width } : { w: width, h: rows }; }
+  function visualToLogical(vx, vy, width, rows, o) {
+    const d = gridDims(width, rows, o.transpose);
+    const x = o.flipH ? d.w - 1 - vx : vx;
+    const y = o.flipV ? d.h - 1 - vy : vy;
+    const col = o.transpose ? y : x;
+    const row = o.transpose ? x : y;
+    return col * rows + row;
+  }
+  function localPhysical(p, s, rows) {
+    if (s.serpentine && rows > 0) {
+      const run = Math.floor(p / rows); const pos = p % rows;
+      if (run % 2 === 1) p = run * rows + (rows - 1 - pos);
+    }
+    if (s.reversed) p = s.length - 1 - p;
+    return p;
+  }
+  function logicalToPhysical(p, sections, rows) {
+    let offset = 0;
+    for (const s of sections) {
+      if (p < offset + s.length) return offset + localPhysical(p - offset, s, rows);
+      offset += s.length;
+    }
+    return p;
+  }
+  function sectionOfLogical(p, sections) {
+    let offset = 0;
+    for (let i = 0; i < sections.length; i++) { if (p < offset + sections[i].length) return i; offset += sections[i].length; }
+    return Math.max(0, sections.length - 1);
+  }
+
+  // Snap an arbitrary color to the nearest approved color. Distance uses the
+  // "redmean" weighting so matches look right to the eye, not just numerically.
+  // Pass null/empty palette to disable snapping (returns the input unchanged).
+  function nearestPalette(hex, palette) {
+    if (!palette || !palette.length) return hex;
+    const [r, g, b] = hexToRgb(hex);
+    let best = palette[0], bestD = Infinity;
+    for (const p of palette) {
+      const [pr, pg, pb] = hexToRgb(p);
+      const rm = (r + pr) / 2, dr = r - pr, dg = g - pg, db = b - pb;
+      const dist = (2 + rm / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rm) / 256) * db * db;
+      if (dist < bestD) { bestD = dist; best = p; }
+    }
+    return best;
+  }
+  function snapColors(colors, palette) {
+    if (!palette || !palette.length) return colors;
+    return colors.map((c) => (c ? nearestPalette(c, palette) : c));
+  }
+
+  // Visual cells covered by a line (Bresenham) or rectangle outline from a→b.
+  function shapeCells(a, b, kind) {
+    const out = [];
+    if (kind === "line") {
+      let x0 = a.vx, y0 = a.vy; const x1 = b.vx, y1 = b.vy;
+      const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+      const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let err = dx + dy;
+      for (;;) { out.push({ vx: x0, vy: y0 }); if (x0 === x1 && y0 === y1) break; const e2 = 2 * err; if (e2 >= dy) { err += dy; x0 += sx; } if (e2 <= dx) { err += dx; y0 += sy; } }
+    } else {
+      const x0 = Math.min(a.vx, b.vx), x1 = Math.max(a.vx, b.vx), y0 = Math.min(a.vy, b.vy), y1 = Math.max(a.vy, b.vy);
+      for (let x = x0; x <= x1; x++) { out.push({ vx: x, vy: y0 }); out.push({ vx: x, vy: y1 }); }
+      for (let y = y0; y <= y1; y++) { out.push({ vx: x0, vy: y }); out.push({ vx: x1, vy: y }); }
+    }
+    return out;
+  }
+
+  window.CG = {
+    GoveeDevice, buildSceneLeadings, buildPacket, COMMIT, sampleSource,
+    hexToRgb, hslHex, dim, lerpHex, decomposeColor,
+    totalSegments, gridWidth, gridDims, visualToLogical, localPhysical, logicalToPhysical, sectionOfLogical,
+    nearestPalette, snapColors, shapeCells,
+  };
 })();

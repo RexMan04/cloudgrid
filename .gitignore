@@ -14,3 +14,6 @@ captures/
 
 # OS cruft
 .DS_Store
+
+# Interceptor verification screenshots (local browser-testing artifacts)
+interceptor-screenshot-*.png

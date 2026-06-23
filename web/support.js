@@ -1,4 +1,7 @@
-// GENERATED from dc-runtime/src/*.ts — do not edit. Rebuild with `cd dc-runtime && bun run build`.
+// Vendored, generated artifact: the Claude Design "dc-runtime" (React-over-CDN
+// component runtime that powers <x-dc>/{{ }}/sc-for/sc-if). Built by Claude
+// Design, not from sources in this repo — do not hand-edit. To update, re-export
+// support.js from the Claude Design project that owns CloudGrid.dc.html.
 "use strict";
 (() => {
   var __defProp = Object.defineProperty;

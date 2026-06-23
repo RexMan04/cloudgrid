@@ -59,6 +59,7 @@
           <button onClick="{{ mFill }}" style="{{ dropItem }}"><span>Fill all</span></button>
           <button onClick="{{ mClear }}" style="{{ dropItem }}"><span>Clear canvas</span></button>
           <button onClick="{{ mEraser }}" style="{{ dropItem }}"><span>Toggle eraser</span><span style="{{ erMark }}">●</span></button>
+          <button onClick="{{ mPalette }}" style="{{ dropItem }}"><span>Approved palette…</span></button>
         </div>
       </sc-if>
     </div>
@@ -127,108 +128,39 @@
     <!-- ---- TOOL PANEL ---- -->
     <div style="{{ panelStyle }}">
       <div style="{{ panelInnerStyle }}">
-        <!-- PAINT -->
+        <!-- DESIGNS (palette + generators + AI + image + gif + scenes) -->
         <div style="{{ secWrap }}">
-          <button onClick="{{ tPaint }}" style="{{ headPaint }}"><span style="{{ chevPaint }}">›</span><span style="flex:1; text-align:left;">Paint</span></button>
-          <sc-if value="{{ expanded.paint }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ tDesigns }}" style="{{ headDesigns }}"><span style="{{ chevDesigns }}">›</span><span style="flex:1; text-align:left;">Designs</span></button>
+          <sc-if value="{{ expanded.designs }}" hint-placeholder-val="{{ true }}">
           <div style="{{ secBody }}">
           <div style="{{ cardStyle }}">
-            <div style="{{ cardHead }}">Color</div>
-            <div style="display:flex; align-items:center; gap:10px;">
-              <input type="color" value="{{ selected }}" onInput="{{ onColorInput }}" style="width:46px; height:38px; padding:0; border:1px solid #2e343d; border-radius:8px; background:none; cursor:pointer;" />
-              <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#cfd6e0; letter-spacing:.02em;">{{ selectedUpper }}</div>
-            </div>
-            <div style="display:flex; flex-wrap:wrap; gap:6px;">
-              <sc-for list="{{ swatches }}" as="sw" hint-placeholder-count="9">
-                <button onClick="{{ sw.onClick }}" title="{{ sw.color }}" style="{{ sw.style }}"></button>
-              </sc-for>
-            </div>
-          </div>
-          <div style="{{ cardStyle }}">
-            <div style="{{ cardHead }}">Brush</div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button onClick="{{ mEraser }}" style="{{ eraserBtn }}">Eraser</button>
-              <button onClick="{{ mFill }}" style="{{ btnGhost }}">Fill all</button>
-              <button onClick="{{ mClear }}" style="{{ btnGhost }}">Clear</button>
-            </div>
-            <div style="{{ sliderRow }}"><span style="{{ sliderLab }}">Brightness</span><input type="range" min="0" max="100" value="{{ brushBright }}" onInput="{{ onBrushBright }}" style="flex:1;" /><span style="{{ sliderVal }}">{{ brushBright }}%</span></div>
-            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Click or drag to paint at the brush brightness. Right-click a cell for quick actions, including its own brightness. Changes push to the lights on release.</div>
-          </div>
-          </div>
-        </sc-if>
-        </div>
-
-        <!-- PATTERNS -->
-        <div style="{{ secWrap }}">
-          <button onClick="{{ tPatterns }}" style="{{ headPatterns }}"><span style="{{ chevPatterns }}">›</span><span style="flex:1; text-align:left;">Patterns</span></button>
-          <sc-if value="{{ expanded.patterns }}" hint-placeholder-val="{{ false }}">
-          <div style="{{ secBody }}">
-          <div style="{{ cardStyle }}">
-            <div style="{{ cardHead }}">Generators</div>
+            <div style="display:flex; align-items:center; gap:6px;"><div style="{{ cardHead }}">Generators</div><span onMouseEnter="{{ tipOn.patterns }}" onMouseLeave="{{ hideTip }}" style="{{ helpIcon }}">i</span></div>
             <div style="display:flex; flex-wrap:wrap; gap:7px;">
               <sc-for list="{{ patterns }}" as="p" hint-placeholder-count="6">
                 <button onClick="{{ p.onClick }}" style="{{ btnGhost }}">{{ p.label }}</button>
               </sc-for>
             </div>
-            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Gradient, stripes and checker use your selected color. Rainbows fill the full spectrum across the grid.</div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:11.5px; color:#8b94a3;">Gradient from</span>
+              <span style="width:18px; height:18px; border-radius:5px; background:{{ selected }}; border:1px solid #2e343d;"></span>
+              <span style="font-size:11.5px; color:#8b94a3;">to</span>
+              <input type="color" value="{{ gradColor }}" onInput="{{ onGradColor }}" style="width:34px; height:28px; padding:0; border:1px solid #2e343d; border-radius:6px; background:none; cursor:pointer;" />
+            </div>
           </div>
-          </div>
-        </sc-if>
-        </div>
-
-        <!-- EFFECTS -->
-        <div style="{{ secWrap }}">
-          <button onClick="{{ tEffects }}" style="{{ headEffects }}"><span style="{{ chevEffects }}">›</span><span style="flex:1; text-align:left;">Effects</span></button>
-          <sc-if value="{{ expanded.effects }}" hint-placeholder-val="{{ false }}">
-          <div style="{{ secBody }}">
           <div style="{{ cardStyle }}">
-            <div style="{{ cardHead }}">On-device effect</div>
-            <div style="display:flex; flex-wrap:wrap; gap:7px;">
-              <sc-for list="{{ effects }}" as="e" hint-placeholder-count="5">
-                <button onClick="{{ e.onClick }}" style="{{ e.style }}">{{ e.label }}</button>
-              </sc-for>
-            </div>
-            <div style="display:flex; align-items:center; gap:9px; padding-top:2px;">
-              <span style="font-size:11.5px; color:#8b94a3;">Try byte</span>
-              <input type="number" min="0" max="255" value="{{ effect }}" onChange="{{ onEffectByte }}" style="{{ numInput }}" />
-              <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#34cf6b;">{{ effectHex }}</span>
-            </div>
-            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Motion effects run on the controller and keep animating after the page closes. <span style="color:#aeb6c2;">Static</span> holds your exact per-dot design. Speed is in the inspector.</div>
+            <div style="display:flex; align-items:center; gap:6px;"><div style="{{ cardHead }}">AI generate</div><span onMouseEnter="{{ tipOn.ai }}" onMouseLeave="{{ hideTip }}" style="{{ helpIcon }}">i</span></div>
+            <input type="text" value="{{ aiPrompt }}" onInput="{{ onAiPrompt }}" onKeyDown="{{ onAiKey }}" placeholder="sunset, lightning, US flag…" style="{{ textInput }}" />
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12px; color:#cfd6e0;">
+              <input type="checkbox" checked="{{ aiAnimated }}" onChange="{{ onAiAnimated }}" style="width:15px; height:15px; accent-color:#34cf6b; cursor:pointer;" />
+              <span>Animated (looping)</span>
+            </label>
+            <button onClick="{{ generateAI }}" style="{{ btnPrimary }}">{{ aiBtnLabel }}</button>
+            <span style="font-size:11.5px; color:#8b94a3;">{{ aiStatus }}</span>
           </div>
-          </div>
-        </sc-if>
-        </div>
-
-        <!-- ANIMATE -->
-        <div style="{{ secWrap }}">
-          <button onClick="{{ tAnimate }}" style="{{ headAnimate }}"><span style="{{ chevAnimate }}">›</span><span style="flex:1; text-align:left;">Animate</span></button>
-          <sc-if value="{{ expanded.animate }}" hint-placeholder-val="{{ false }}">
-          <div style="{{ secBody }}">
           <div style="{{ cardStyle }}">
-            <div style="{{ cardHead }}">Live animation</div>
-            <div style="display:flex; flex-wrap:wrap; gap:7px;">
-              <sc-for list="{{ anims }}" as="a" hint-placeholder-count="6">
-                <button onClick="{{ a.onClick }}" style="{{ a.style }}">{{ a.label }}</button>
-              </sc-for>
-            </div>
-            <div style="display:flex; gap:8px;">
-              <button onClick="{{ stopAnim }}" style="{{ btnGhost }}">Stop</button>
-            </div>
-            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Streamed from the browser at the inspector Speed; previews live on the grid here and pushes per-light motion to the device. Breathe &amp; Wave animate your painted design.</div>
-          </div>
-          </div>
-        </sc-if>
-        </div>
-
-        <!-- IMPORT -->
-        <div style="{{ secWrap }}">
-          <button onClick="{{ tImport }}" style="{{ headImport }}"><span style="{{ chevImport }}">›</span><span style="flex:1; text-align:left;">Import</span></button>
-          <sc-if value="{{ expanded.import }}" hint-placeholder-val="{{ false }}">
-          <div style="{{ secBody }}">
-          <div style="{{ cardStyle }}">
-            <div style="{{ cardHead }}">Image</div>
-            <label for="cg-img" style="{{ btnPrimaryGhost }}">Choose image…</label>
-            <input id="cg-img" type="file" accept="image/*" style="display:none;" onChange="{{ onChooseImage }}" />
+            <div style="display:flex; align-items:center; gap:6px;"><div style="{{ cardHead }}">Media</div><span onMouseEnter="{{ tipOn.media }}" onMouseLeave="{{ hideTip }}" style="{{ helpIcon }}">i</span></div>
+            <label for="cg-media-any" style="{{ btnPrimaryGhost }}">Upload image / GIF / video…</label>
+            <input id="cg-media-any" type="file" accept="image/*,video/*" style="display:none;" onChange="{{ onChooseAnyMedia }}" />
             <div style="display:flex; flex-wrap:wrap; gap:6px;">
               <sc-for list="{{ fits }}" as="f" hint-placeholder-count="3">
                 <button onClick="{{ f.onClick }}" style="{{ f.style }}">{{ f.label }}</button>
@@ -240,45 +172,13 @@
               <div style="{{ sliderRow }}"><span style="{{ sliderLab }}">Brightness</span><input type="range" min="0" max="200" value="{{ imgBright }}" onInput="{{ onImgBright }}" style="flex:1;" /><span style="{{ sliderVal }}">{{ imgBright }}%</span></div>
               <div style="{{ sliderRow }}"><span style="{{ sliderLab }}">Contrast</span><input type="range" min="0" max="300" value="{{ imgContrast }}" onInput="{{ onImgContrast }}" style="flex:1;" /><span style="{{ sliderVal }}">{{ imgContrast }}%</span></div>
             </div>
-            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Samples to the {{ gridW }}×{{ gridH }} grid ({{ orient }}). contain = whole image, cover = fill &amp; crop, stretch = ignore aspect.</div>
-          </div>
-          <div style="{{ cardStyle }}">
-            <div style="{{ cardHead }}">GIF / video</div>
-            <label for="cg-media" style="{{ btnPrimaryGhost }}">Choose GIF / video…</label>
-            <input id="cg-media" type="file" accept="image/gif,image/webp,image/apng,video/*" style="display:none;" onChange="{{ onChooseMedia }}" />
             <div style="display:flex; gap:8px; align-items:center;">
               <button onClick="{{ stopAnim }}" style="{{ btnGhost }}">Stop</button>
               <span style="font-size:11.5px; color:#8b94a3;">{{ mediaStatus }}</span>
             </div>
-            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Samples each frame and loops it live (uses Speed for frame rate). Needs Chrome/Edge for GIF decoding; capped at 240 frames.</div>
           </div>
-          </div>
-        </sc-if>
-        </div>
-
-        <!-- AI -->
-        <div style="{{ secWrap }}">
-          <button onClick="{{ tAi }}" style="{{ headAi }}"><span style="{{ chevAi }}">›</span><span style="flex:1; text-align:left;">AI</span></button>
-          <sc-if value="{{ expanded.ai }}" hint-placeholder-val="{{ false }}">
-          <div style="{{ secBody }}">
           <div style="{{ cardStyle }}">
-            <div style="{{ cardHead }}">Generate pattern</div>
-            <input type="text" value="{{ aiPrompt }}" onInput="{{ onAiPrompt }}" onKeyDown="{{ onAiKey }}" placeholder="sunset, lightning, US flag…" style="{{ textInput }}" />
-            <button onClick="{{ generateAI }}" style="{{ btnPrimary }}">{{ aiBtnLabel }}</button>
-            <span style="font-size:11.5px; color:#8b94a3;">{{ aiStatus }}</span>
-            <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Generates a {{ gridW }}×{{ gridH }} pattern. Needs an AI key in <span style="color:#aeb6c2;">.env</span> (ANTHROPIC_API_KEY or OPENAI_API_KEY) — the key never reaches the browser.</div>
-          </div>
-          </div>
-        </sc-if>
-        </div>
-
-        <!-- SCENES -->
-        <div style="{{ secWrap }}">
-          <button onClick="{{ tScenes }}" style="{{ headScenes }}"><span style="{{ chevScenes }}">›</span><span style="flex:1; text-align:left;">Scenes</span></button>
-          <sc-if value="{{ expanded.scenes }}" hint-placeholder-val="{{ false }}">
-          <div style="{{ secBody }}">
-          <div style="{{ cardStyle }}">
-            <div style="{{ cardHead }}">Save current</div>
+            <div style="{{ cardHead }}">Save scene</div>
             <div style="display:flex; gap:7px;">
               <input type="text" value="{{ sceneName }}" onInput="{{ onSceneName }}" onKeyDown="{{ onSceneKey }}" placeholder="scene name" style="{{ textInput }}" />
               <button onClick="{{ saveScene }}" style="{{ btnPrimary }}">Save</button>
@@ -311,6 +211,43 @@
         </sc-if>
         </div>
 
+        <!-- EFFECTS -->
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tEffects }}" style="{{ headEffects }}"><span style="{{ chevEffects }}">›</span><span style="flex:1; text-align:left;">Effects</span></button>
+          <sc-if value="{{ expanded.effects }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="display:flex; align-items:center; gap:6px;"><div style="{{ cardHead }}">On-device effect</div><span onMouseEnter="{{ tipOn.effects }}" onMouseLeave="{{ hideTip }}" style="{{ helpIcon }}">i</span></div>
+            <div style="display:flex; flex-wrap:wrap; gap:7px;">
+              <sc-for list="{{ effects }}" as="e" hint-placeholder-count="5">
+                <button onClick="{{ e.onClick }}" style="{{ e.style }}">{{ e.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          </div>
+        </sc-if>
+        </div>
+
+        <!-- ANIMATE -->
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tAnimate }}" style="{{ headAnimate }}"><span style="{{ chevAnimate }}">›</span><span style="flex:1; text-align:left;">Animate</span></button>
+          <sc-if value="{{ expanded.animate }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="display:flex; align-items:center; gap:6px;"><div style="{{ cardHead }}">Live animation</div><span onMouseEnter="{{ tipOn.animate }}" onMouseLeave="{{ hideTip }}" style="{{ helpIcon }}">i</span></div>
+            <div style="display:flex; flex-wrap:wrap; gap:7px;">
+              <sc-for list="{{ anims }}" as="a" hint-placeholder-count="6">
+                <button onClick="{{ a.onClick }}" style="{{ a.style }}">{{ a.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button onClick="{{ stopAnim }}" style="{{ btnGhost }}">Stop</button>
+            </div>
+          </div>
+          </div>
+        </sc-if>
+        </div>
+
       </div>
     </div>
 
@@ -329,20 +266,61 @@
         <div style="flex:1;"></div>
         <button onClick="{{ mIndices }}" style="{{ idxBtn }}">Indices</button>
       </div>
+      <!-- tool options bar -->
+      <div style="display:flex; align-items:center; gap:9px; padding:7px 16px; border-bottom:1px solid #1e232b; background:#0c0f13; flex:none; flex-wrap:wrap;">
+        <label style="position:relative; display:inline-flex; width:34px; height:30px; border-radius:7px; overflow:hidden; border:1px solid #2a313b; cursor:pointer; flex:none;">
+          <input ref="{{ colorInputRef }}" type="color" value="{{ selected }}" onInput="{{ onColorInput }}" style="position:absolute; inset:0; opacity:0; width:100%; height:100%; padding:0; border:none; cursor:pointer;" />
+          <span style="width:100%; height:100%; background:{{ selected }};"></span>
+        </label>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#aeb6c2;">{{ selectedUpper }}</span>
+        <div style="display:flex; gap:5px; flex-wrap:wrap;">
+          <sc-for list="{{ swatches }}" as="sw" hint-placeholder-count="9">
+            <button onClick="{{ sw.onClick }}" title="{{ sw.color }}" style="{{ sw.style }}"></button>
+          </sc-for>
+        </div>
+        <span style="width:1px; height:18px; background:#262b33;"></span>
+        <span style="font-size:11.5px; color:#8b94a3;">Size</span>
+        <input type="range" min="1" max="8" value="{{ brushSize }}" onInput="{{ onBrushSize }}" style="width:74px;" />
+        <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#aeb6c2; width:12px;">{{ brushSize }}</span>
+        <span style="font-size:11.5px; color:#8b94a3;">Bright</span>
+        <input type="range" min="0" max="100" value="{{ brushBright }}" onInput="{{ onBrushBright }}" style="width:74px;" />
+        <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#aeb6c2; width:32px;">{{ brushBright }}%</span>
+        <sc-if value="{{ hasSelection }}" hint-placeholder-val="{{ false }}">
+          <span style="width:1px; height:18px; background:#262b33;"></span>
+          <button onClick="{{ fillSel }}" style="{{ chipBtn }}">Fill</button>
+          <button onClick="{{ clearSel }}" style="{{ chipBtn }}">Clear</button>
+          <button onClick="{{ deselect }}" style="{{ chipBtn }}">Deselect</button>
+        </sc-if>
+        <div style="flex:1;"></div>
+        <button onClick="{{ undo }}" title="Undo" style="{{ undoBtn }}">↶</button>
+        <button onClick="{{ redo }}" title="Redo" style="{{ redoBtn }}">↷</button>
+        <button onClick="{{ mFill }}" style="{{ btnGhost }}">Fill all</button>
+        <button onClick="{{ mClear }}" style="{{ btnGhost }}">Clear</button>
+      </div>
       <div style="position:relative; flex:1; min-height:0; display:flex;">
         <!-- floating tool dock -->
         <div style="position:absolute; top:14px; left:14px; z-index:8; display:flex; flex-direction:column; gap:7px; padding:7px; background:#13171d; border:1px solid #2a313b; border-radius:12px; box-shadow:0 12px 34px rgba(0,0,0,0.5);">
-          <button onClick="{{ selectPen }}" title="Brush — B" style="{{ penBtn }}">
+          <button onClick="{{ onToolBrush }}" title="Brush (B)" style="{{ toolBrushBtn }}">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
           </button>
-          <button onClick="{{ selectEraser }}" title="Eraser — E" style="{{ eraserToolBtn }}">
+          <button onClick="{{ onToolEraser }}" title="Eraser (E)" style="{{ toolEraserBtn }}">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.24 3.56l4.2 4.2a2 2 0 0 1 0 2.82L12.6 18.4H7.2l-3.96-3.96a2 2 0 0 1 0-2.82l9.18-9.18a2 2 0 0 1 2.82 0z"></path><line x1="8" y1="8" x2="15" y2="15"></line><line x1="20.5" y1="20.5" x2="11" y2="20.5"></line></svg>
           </button>
-          <div style="height:1px; background:#262b33; margin:1px 3px;"></div>
-          <label title="Pick color — C" style="{{ colorToolBtn }}">
-            <input ref="{{ colorInputRef }}" type="color" value="{{ selected }}" onInput="{{ onColorInput }}" style="position:absolute; inset:0; opacity:0; width:100%; height:100%; padding:0; border:none; cursor:pointer;" />
-            <span style="{{ colorToolSwatch }}"></span>
-          </label>
+          <button onClick="{{ onToolBucket }}" title="Bucket fill (G)" style="{{ toolBucketBtn }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l7-5 7 9-7 5-7-9z"></path><path d="M12 3l1 1"></path><path d="M20 15c0 1.3-.9 2.2-2 2.2S16 16.3 16 15s2-2.7 2-2.7 2 1.4 2 2.7z"></path></svg>
+          </button>
+          <button onClick="{{ onToolLine }}" title="Line (L)" style="{{ toolLineBtn }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="20" x2="20" y2="4"></line></svg>
+          </button>
+          <button onClick="{{ onToolRect }}" title="Rectangle (R)" style="{{ toolRectBtn }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12" rx="1"></rect></svg>
+          </button>
+          <button onClick="{{ onToolEyedrop }}" title="Eyedropper: click a cell to copy it as a base color + brightness level" style="{{ toolEyedropBtn }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22l1-4 11-11 3 3L6 21l-4 1z"></path><path d="M14.5 5.5l2-2a2.12 2.12 0 0 1 3 3l-2 2"></path></svg>
+          </button>
+          <button onClick="{{ onToolSelect }}" title="Box select: drag a region" style="{{ toolSelectBtn }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"><rect x="4" y="4" width="16" height="16" rx="1"></rect></svg>
+          </button>
         </div>
         <div ref="{{ canvasViewport }}" style="flex:1; display:flex; align-items:center; justify-content:center; padding:24px; min-height:0; overflow:auto; background:radial-gradient(120% 120% at 50% 0%, #12161c 0%, #0a0c10 70%);">
         <div style="{{ gridStyle }}">
@@ -390,7 +368,7 @@
       </div>
 
       <div style="{{ cardStyle }}">
-        <div style="{{ cardHead }}">Calibrate · orientation</div>
+        <div style="display:flex; align-items:center; gap:6px;"><div style="{{ cardHead }}">Calibrate · orientation</div><span onMouseEnter="{{ tipOn.calibrate }}" onMouseLeave="{{ hideTip }}" style="{{ helpIcon }}">i</span></div>
         <div style="{{ sliderRow }}">
           <span style="{{ sliderLab }}">Run length</span>
           <input type="number" min="1" max="45" value="{{ rows }}" onChange="{{ onRows }}" style="{{ numInput }}" />
@@ -401,7 +379,6 @@
           <button onClick="{{ mFlipH }}" style="{{ flipHBtn }}">Flip ↔</button>
           <button onClick="{{ mFlipV }}" style="{{ flipVBtn }}">Flip ↕</button>
         </div>
-        <div style="font-size:11.5px; color:#6c7686; line-height:1.5;">Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner.</div>
       </div>
 
       <div style="{{ cardStyle }}">
@@ -441,14 +418,54 @@
       <button onClick="{{ ctxEyedrop }}" style="{{ dropItem }}"><span>Pick color from cell</span></button>
       <div style="height:1px; background:#262b33; margin:5px 0;"></div>
       <div style="padding:2px 9px 4px; font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#6c7686;">Cell brightness</div>
-      <div style="display:flex; gap:5px; padding:0 9px 4px;">
-        <sc-for list="{{ ctxBrights }}" as="cb" hint-placeholder-count="4">
-          <button onClick="{{ cb.onClick }}" style="{{ chipBtn }}">{{ cb.label }}</button>
-        </sc-for>
+      <div style="display:flex; align-items:center; gap:8px; padding:0 9px 6px;">
+        <input type="range" min="0" max="100" value="{{ ctxCellBright }}" onInput="{{ onCtxCellBright }}" style="flex:1;" />
+        <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#aeb6c2; width:34px; text-align:right;">{{ ctxCellBright }}%</span>
       </div>
       <div style="height:1px; background:#262b33; margin:5px 0;"></div>
       <button onClick="{{ ctxFillSection }}" style="{{ dropItem }}"><span>Fill section</span></button>
       <button onClick="{{ ctxClearSection }}" style="{{ dropItem }}"><span>Clear section</span></button>
+    </div>
+  </sc-if>
+
+  <!-- hover-help tooltip -->
+  <sc-if value="{{ tipOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="{{ tipStyle }}">{{ tipText }}</div>
+  </sc-if>
+
+  <!-- palette swatch context menu -->
+  <sc-if value="{{ palCtxOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePalCtx }}" onContextMenu="{{ closePalCtx }}" style="position:fixed; inset:0; z-index:99;"></div>
+    <div style="{{ palCtxStyle }}">
+      <button onClick="{{ palCtxSetActive }}" style="{{ dropItem }}"><span>Set as active color</span><span style="width:11px;height:11px;border-radius:3px;{{ palCtxSwatchBg }}"></span></button>
+      <button onClick="{{ palCtxRemove }}" style="{{ dropItem }}"><span>Remove from palette</span><span style="color:#ff6b6b;">✕</span></button>
+    </div>
+  </sc-if>
+
+  <!-- approved palette modal (opened from the Edit menu) -->
+  <sc-if value="{{ paletteModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePaletteModal }}" style="position:fixed; inset:0; z-index:70; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center;">
+      <div onClick="{{ stopProp }}" style="width:420px; max-width:92vw; background:#14181e; border:1px solid #2a313b; border-radius:14px; padding:18px; box-shadow:0 24px 60px rgba(0,0,0,0.6); display:flex; flex-direction:column; gap:14px;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div style="font-size:14px; font-weight:600; color:#e6e9ef;">Approved palette</div>
+          <button onClick="{{ onTogglePalette }}" style="{{ paletteToggleBtn }}">Snap · {{ paletteToggleLabel }}</button>
+        </div>
+        <div style="font-size:12px; color:#8b94a3; line-height:1.5;">When Snap is on, AI generation and uploaded images use only these colors, so they render true to the LEDs. Click a swatch to use it, right-click to manage.</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          <sc-for list="{{ palette }}" as="pc" hint-placeholder-count="8">
+            <button onClick="{{ pc.onClick }}" onContextMenu="{{ pc.onCtx }}" title="{{ pc.title }}" style="{{ pc.style }}"></button>
+          </sc-for>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button onClick="{{ onAddPalette }}" style="{{ btnGhost }}">+ Add selected</button>
+          <button onClick="{{ onCopyPalette }}" style="{{ btnGhost }}">Copy</button>
+          <label for="cg-pal-import" style="{{ btnGhost }}">Import</label>
+          <input id="cg-pal-import" type="file" accept="application/json" style="display:none;" onChange="{{ onImportPalette }}" />
+          <button onClick="{{ onResetPalette }}" style="{{ btnGhost }}">Reset</button>
+          <div style="flex:1;"></div>
+          <button onClick="{{ closePaletteModal }}" style="{{ btnPrimary }}">Done</button>
+        </div>
+      </div>
     </div>
   </sc-if>
 
@@ -462,22 +479,27 @@ class Component extends DCLogic {
       { length: 44, reversed: false, serpentine: false },
       { length: 44, reversed: false, serpentine: false },
     ];
+    const DEFAULT_PALETTE = ["#ff0000", "#ff5a00", "#ff9a00", "#ffd400", "#ffff00", "#7dff00", "#00ff00", "#00ff7d", "#00ffd5", "#00b4ff", "#0040ff", "#5a00ff", "#a400ff", "#ff00cc", "#ff2d6e", "#ffffff"];
+    this.DEFAULT_PALETTE = DEFAULT_PALETTE;
+    const RECENT_SEED = ["#ff0000", "#ff7a00", "#ffd400", "#00ff00", "#00ffd5", "#0066ff", "#8a2be2", "#ff00aa", "#ffffff"];
+    this.RECENT_MAX = 9;
     this.state = {
       connected: false, status: "Not connected", busy: false, powered: true,
       sections, rows: 11, transpose: false, flipH: false, flipV: false,
       colors: new Array(this.totalSegments(sections)).fill(null),
       bright: new Array(this.totalSegments(sections)).fill(100),
       previewColors: null,
-      selected: "#ff0000", erasing: false,
-      brushBright: 100, brightness: 100, effect: 0x13, speed: 50,
+      selected: "#ff0000", gradColor: "#0000ff", erasing: false, recent: RECENT_SEED.slice(),
+      paletteOn: true, palette: DEFAULT_PALETTE.slice(), palCtx: null, tip: null, paletteModal: false,
+      brushBright: 100, brushSize: 1, brightness: 100, effect: 0x13, speed: 50,
       animationId: null, scenes: [],
       // ui
-      layout: "studio", tool: "paint", openMenu: null, showIndices: false,
-      expanded: { paint: true, patterns: false, effects: false, animate: false, import: false, ai: false, scenes: false, calibrate: false, help: false },
+      tool: "brush", dragCells: null, selection: null, openMenu: null, showIndices: false,
+      expanded: { designs: true, effects: false, animate: false },
       ctx: null, viewportW: 760, viewportH: 560, panelW: 344, inspectorW: 308,
       // tool-local
       fit: "contain", rotate: false, imgSat: 100, imgBright: 100, imgContrast: 100,
-      sceneName: "", mediaStatus: "", aiPrompt: "", aiStatus: "", aiBusy: false,
+      sceneName: "", mediaStatus: "", aiPrompt: "", aiStatus: "", aiBusy: false, aiAnimated: false,
     };
     // non-render instance state
     this.device = null;
@@ -486,31 +508,39 @@ class Component extends DCLogic {
     this.sceneChain = Promise.resolve(); this.sceneGen = 0;
     this.imgEl = null; this.imgW = 0; this.imgH = 0;
     this.painting = false;
+    this.undoStack = []; this.redoStack = [];
+    this._ctxBrightSnapped = false;
     this._persist = this._persist.bind(this);
 
-    this.SWATCHES = ["#ff0000", "#ff7a00", "#ffd400", "#00ff00", "#00ffd5", "#0066ff", "#8a2be2", "#ff00aa", "#ffffff"];
+    // Per-card help text, shown on hover of the card's ⓘ icon (see showTip).
+    this.HELP = {
+      patterns: "Gradients run from your selected color to the end color above. Stripes and checker use the selected color; rainbows fill the full spectrum.",
+      effects: "Effects run on the controller and keep animating after the page closes; they apply motion to your painted design. Gradient (the default) slowly flows, so painted designs drift under it. Speed is in the inspector.",
+      animate: "Streamed from the browser at the inspector Speed; previews live on the grid and push per-light motion to the device. Breathe, Wave and Scroll animate your painted design.",
+      media: "Load an image, GIF, or video. A still image samples once (use the fit and color sliders); a GIF or video loops live (Chrome/Edge only, capped at 240 frames).",
+      ai: "Generates a pattern for the current grid. Needs an AI key in .env (ANTHROPIC_API_KEY or OPENAI_API_KEY); the key never reaches the browser.",
+      calibrate: "Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner.",
+    };
+    // dir bytes confirmed from official-app btsnoop capture (2026-06-23).
+    // 0x13 is Gradient (a slow flow), NOT static — it's what made painted
+    // designs drift. No truly-static dir byte exists in any capture.
     this.EFFECTS = [
-      { label: "Static", dir: 0x13 }, { label: "Clockwise", dir: 0x09 },
-      { label: "Counter-CW", dir: 0x0a }, { label: "Breathe", dir: 0x14 }, { label: "Flash", dir: 0x0f },
-    ];
-    this.TABS = [
-      { key: "paint", label: "Paint" }, { key: "patterns", label: "Patterns" },
-      { key: "effects", label: "Effects" }, { key: "animate", label: "Animate" },
-      { key: "import", label: "Import" }, { key: "ai", label: "AI" },
-      { key: "scenes", label: "Scenes" }, { key: "calibrate", label: "Calibrate" },
+      { label: "Breathe", dir: 0x14 }, { label: "Twinkle", dir: 0x0f },
+      { label: "Gradient", dir: 0x13 }, { label: "Cycle", dir: 0x02 },
+      { label: "Clockwise", dir: 0x09 }, { label: "Counter-CW", dir: 0x0a },
     ];
     const hsl = (h, s, l) => this.hslHex(h, s, l);
     const dim = (hex, t) => this.dim(hex, t);
+    const lerp = (a, b, t) => this.lerpHex(a, b, t);
     this.PATTERNS = [
       { label: "Rainbow →", fn: (vx, _vy, w) => hsl(w > 1 ? vx / (w - 1) : 0, 1, 0.5) },
       { label: "Rainbow ↓", fn: (_vx, vy, _w, h) => hsl(h > 1 ? vy / (h - 1) : 0, 1, 0.5) },
-      { label: "Gradient →", fn: (vx, _vy, w, _h, sel) => dim(sel, w > 1 ? 1 - vx / (w - 1) : 1) },
-      { label: "V-stripes", fn: (vx) => (vx % 2 ? null : null) },
+      { label: "Gradient →", fn: (vx, _vy, w, _h, sel, grad) => lerp(sel, grad, w > 1 ? vx / (w - 1) : 0) },
+      { label: "Gradient ↓", fn: (_vx, vy, _w, h, sel, grad) => lerp(sel, grad, h > 1 ? vy / (h - 1) : 0) },
+      { label: "V-stripes", fn: (vx, _vy, _w, _h, sel) => (vx % 2 ? null : sel) },
       { label: "H-stripes", fn: (_vx, vy, _w, _h, sel) => (vy % 2 ? null : sel) },
       { label: "Checker", fn: (vx, vy, _w, _h, sel) => ((vx + vy) % 2 ? null : sel) },
     ];
-    // fix V-stripes to use selected color
-    this.PATTERNS[3].fn = (vx, _vy, _w, _h, sel) => (vx % 2 ? null : sel);
     this.ANIMATIONS = [
       { id: "rainbow", label: "Rainbow flow", fn: (vx, _vy, c) => hsl(((c.w > 1 ? vx / c.w : 0) + c.frame * 0.03) % 1, 1, 0.5) },
       { id: "cycle", label: "Color cycle", fn: (_vx, _vy, c) => hsl((c.frame * 0.03) % 1, 1, 0.5) },
@@ -518,6 +548,13 @@ class Component extends DCLogic {
       { id: "sparkle", label: "Sparkle", fn: (vx, vy, c) => (((vx * 73 + vy * 131 + c.frame * 977) % 97) < 12 ? c.selected : null) },
       { id: "breathe", label: "Breathe design", fn: (vx, vy, c) => { const b = c.designAt(vx, vy); if (!b) return null; const t = (Math.sin(c.frame * 0.25) + 1) / 2; return dim(b, 0.15 + 0.85 * t); } },
       { id: "wave", label: "Wave", fn: (vx, vy, c) => { const b = c.designAt(vx, vy) || c.selected; const t = (Math.sin(c.frame * 0.3 - vx * 0.5) + 1) / 2; return dim(b, 0.1 + 0.9 * t); } },
+      // Scroll family — shift the painted design and wrap, so the image slides
+      // across the grid. Horizontal = each row cycles within itself; vertical =
+      // each column cycles within itself.
+      { id: "scrollR", label: "Scroll →", fn: (vx, vy, c) => c.designAt(((vx - c.frame) % c.w + c.w) % c.w, vy) },
+      { id: "scrollL", label: "Scroll ←", fn: (vx, vy, c) => c.designAt((vx + c.frame) % c.w, vy) },
+      { id: "scrollD", label: "Scroll ↓", fn: (vx, vy, c) => c.designAt(vx, ((vy - c.frame) % c.h + c.h) % c.h) },
+      { id: "scrollU", label: "Scroll ↑", fn: (vx, vy, c) => c.designAt(vx, (vy + c.frame) % c.h) },
     ];
   }
 
@@ -528,7 +565,7 @@ class Component extends DCLogic {
       if (raw) {
         const p = JSON.parse(raw);
         const patch = {};
-        ["sections", "rows", "transpose", "flipH", "flipV", "selected", "brightness", "effect", "speed", "scenes"].forEach((k) => {
+        ["sections", "rows", "transpose", "flipH", "flipV", "selected", "gradColor", "recent", "paletteOn", "palette", "brightness", "effect", "speed", "scenes"].forEach((k) => {
           if (p[k] != null) patch[k] = p[k];
         });
         const t0 = this.totalSegments(patch.sections || this.state.sections);
@@ -537,19 +574,24 @@ class Component extends DCLogic {
         this.setState(patch);
       }
     } catch (e) {}
-    this._up = () => { if (this.painting) { this.painting = false; this.push(); } };
+    this._up = () => { if (this.painting === "shape") { this.endDrag(); } else if (this.painting) { this.painting = false; this.push(); } };
     window.addEventListener("pointerup", this._up);
     this._keydown = (e) => {
       const tag = e.target && e.target.tagName;
       if (tag && /^(INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) this.redo(); else this.undo(); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") { e.preventDefault(); this.redo(); return; }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
       if (k === "b" || k === "p") { this.selectPen(); e.preventDefault(); }
       else if (k === "e" || k === "x") { this.selectEraser(); e.preventDefault(); }
+      else if (k === "g") { this.selectTool("bucket"); e.preventDefault(); }
+      else if (k === "l") { this.selectTool("line"); e.preventDefault(); }
+      else if (k === "r") { this.selectTool("rect"); e.preventDefault(); }
       else if (k === "c") { if (this._colorInput && this._colorInput.click) this._colorInput.click(); e.preventDefault(); }
       else if (k === "f") { this.fillAll(); e.preventDefault(); }
       else if (k === "i") { this.toggleIndices(); e.preventDefault(); }
-      else if (k >= "1" && k <= "9") { const c = this.SWATCHES[parseInt(k, 10) - 1]; if (c) this.setSelected(c); e.preventDefault(); }
+      else if (k >= "1" && k <= "9") { const c = this.state.recent[parseInt(k, 10) - 1]; if (c) this.setSelected(c); e.preventDefault(); }
       else if (e.key === "Escape") { this.setState({ openMenu: null, ctx: null }); }
     };
     window.addEventListener("keydown", this._keydown);
@@ -564,6 +606,13 @@ class Component extends DCLogic {
     if (window.ResizeObserver) { this._ro = new ResizeObserver(this._measure); }
     requestAnimationFrame(() => { if (this._viewport && this._ro) this._ro.observe(this._viewport); this._measure(); });
     window.addEventListener("resize", this._measure);
+    // Reconnect to the last device on load — no chooser / re-pair on refresh.
+    let acTries = 0;
+    const tryAC = () => {
+      if (window.CG) { this.tryAutoConnect(); return; }
+      if (acTries++ < 25) setTimeout(tryAC, 200);
+    };
+    tryAC();
   }
   componentWillUnmount() {
     window.removeEventListener("pointerup", this._up);
@@ -571,6 +620,7 @@ class Component extends DCLogic {
     window.removeEventListener("keydown", this._keydown);
     if (this._ro) this._ro.disconnect();
     this.animRunning = false;
+    if (this.fxTimer) clearInterval(this.fxTimer);
     if (this.device) this.device.disconnect();
   }
   _persist() {
@@ -578,52 +628,61 @@ class Component extends DCLogic {
       const s = this.state;
       localStorage.setItem("cloudgrid", JSON.stringify({
         sections: s.sections, rows: s.rows, transpose: s.transpose, flipH: s.flipH, flipV: s.flipV,
-        selected: s.selected, brightness: s.brightness, effect: s.effect, speed: s.speed, scenes: s.scenes,
+        selected: s.selected, gradColor: s.gradColor, recent: s.recent, paletteOn: s.paletteOn, palette: s.palette, brightness: s.brightness, effect: s.effect, speed: s.speed, scenes: s.scenes,
       }));
     } catch (e) {}
   }
 
-  // ---------- layout math ----------
-  totalSegments(sections) { return sections.reduce((a, s) => a + s.length, 0); }
-  gridWidth(total, rows) { return Math.max(1, Math.ceil(total / Math.max(1, rows))); }
-  gridDims(width, rows, transpose) { return transpose ? { w: rows, h: width } : { w: width, h: rows }; }
-  visualToLogical(vx, vy, width, rows, o) {
-    const d = this.gridDims(width, rows, o.transpose);
-    const x = o.flipH ? d.w - 1 - vx : vx;
-    const y = o.flipV ? d.h - 1 - vy : vy;
-    const col = o.transpose ? y : x;
-    const row = o.transpose ? x : y;
-    return col * rows + row;
+  // ---------- layout / color / palette math ----------
+  // The implementations live in cloudgrid-core.js (window.CG) so they're pure
+  // and unit-testable; these thin wrappers keep every call site below unchanged.
+  // nearestPalette/snapColors read the palette from component state and forward.
+  totalSegments(sections) { return window.CG.totalSegments(sections); }
+  gridWidth(total, rows) { return window.CG.gridWidth(total, rows); }
+  gridDims(width, rows, transpose) { return window.CG.gridDims(width, rows, transpose); }
+  visualToLogical(vx, vy, width, rows, o) { return window.CG.visualToLogical(vx, vy, width, rows, o); }
+  localPhysical(p, s, rows) { return window.CG.localPhysical(p, s, rows); }
+  logicalToPhysical(p, sections, rows) { return window.CG.logicalToPhysical(p, sections, rows); }
+  sectionOfLogical(p, sections) { return window.CG.sectionOfLogical(p, sections); }
+  hexToRgb(hex) { return window.CG.hexToRgb(hex); }
+  hslHex(h, s, l) { return window.CG.hslHex(h, s, l); }
+  dim(hex, t) { return window.CG.dim(hex, t); }
+  dimHex(hex, t) { return window.CG.dim(hex, t); }
+  lerpHex(a, b, t) { return window.CG.lerpHex(a, b, t); }
+  nearestPalette(hex) { return window.CG.nearestPalette(hex, this.state.palette); }
+  snapColors(colors) { return window.CG.snapColors(colors, this.state.paletteOn ? this.state.palette : null); }
+  addPaletteColor(c) {
+    const v = (c || this.state.selected).toLowerCase();
+    if (this.state.palette.indexOf(v) >= 0) return;
+    this.setState({ palette: this.state.palette.concat([v]) }, this._persist);
   }
-  localPhysical(p, s, rows) {
-    if (s.serpentine && rows > 0) {
-      const run = Math.floor(p / rows); const pos = p % rows;
-      if (run % 2 === 1) p = run * rows + (rows - 1 - pos);
-    }
-    if (s.reversed) p = s.length - 1 - p;
-    return p;
+  removePaletteColor(c) { this.setState({ palette: this.state.palette.filter((x) => x !== c) }, this._persist); }
+  togglePalette() { this.setState({ paletteOn: !this.state.paletteOn }, this._persist); }
+  resetPalette() { this.setState({ palette: this.DEFAULT_PALETTE.slice() }, this._persist); }
+  copyPalette() {
+    const text = JSON.stringify(this.state.palette);
+    try { navigator.clipboard.writeText(text); this.setState({ status: "Palette copied (" + this.state.palette.length + " colors)" }); }
+    catch (e) { this.setState({ status: "Copy failed: " + e.message }); }
   }
-  logicalToPhysical(p, sections, rows) {
-    let offset = 0;
-    for (const s of sections) {
-      if (p < offset + s.length) return offset + this.localPhysical(p - offset, s, rows);
-      offset += s.length;
-    }
-    return p;
+  importPalette(json) {
+    try {
+      const parsed = JSON.parse(json);
+      const arr = Array.isArray(parsed) ? parsed : parsed.palette;
+      if (!Array.isArray(arr)) { this.setState({ status: "Palette import: no colors found" }); return; }
+      const clean = arr.filter((c) => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c)).map((c) => c.toLowerCase());
+      if (clean.length) this.setState({ palette: clean, status: "Palette imported (" + clean.length + " colors)" }, this._persist);
+    } catch (e) { this.setState({ status: "Palette import failed: invalid file" }); }
   }
-  sectionOfLogical(p, sections) {
-    let offset = 0;
-    for (let i = 0; i < sections.length; i++) { if (p < offset + sections[i].length) return i; offset += sections[i].length; }
-    return Math.max(0, sections.length - 1);
+  openPalCtx(e, color) { e.preventDefault(); this.setState({ palCtx: { x: e.clientX, y: e.clientY, color }, ctx: null, openMenu: null }); }
+  closePalCtx() { this.setState({ palCtx: null }); }
+  // Hover help: anchor a floating tooltip above the hovered ⓘ icon.
+  showTip(e, key) {
+    const text = this.HELP[key];
+    if (!text || !e.currentTarget) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    this.setState({ tip: { text, x: r.left + r.width / 2, y: r.top } });
   }
-  hexToRgb(hex) { return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]; }
-  hslHex(h, s, l) {
-    const a = s * Math.min(l, 1 - l);
-    const f = (n) => { const k = (n + h * 12) % 12; const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); return Math.round(255 * c).toString(16).padStart(2, "0"); };
-    return "#" + f(0) + f(8) + f(4);
-  }
-  dim(hex, t) { const [r, g, b] = this.hexToRgb(hex); return "#" + [r, g, b].map((x) => Math.round(x * t).toString(16).padStart(2, "0")).join(""); }
-  dimHex(hex, t) { return this.dim(hex, t); }
+  hideTip() { if (this.state.tip) this.setState({ tip: null }); }
 
   orient() { return { transpose: this.state.transpose, flipH: this.state.flipH, flipV: this.state.flipV }; }
   dims() {
@@ -677,10 +736,24 @@ class Component extends DCLogic {
     }
   }
 
+  wireDevice(dev) {
+    dev.onDisconnect = (intentional) => this.setState({ connected: false, status: intentional ? "Disconnected" : "Reconnecting…" });
+    dev.onReconnect = () => { this.setState({ connected: true, status: "Connected: " + dev.name }); this.push(); };
+  }
+  async tryAutoConnect() {
+    const dev = new window.CG.GoveeDevice();
+    this.wireDevice(dev);
+    try {
+      if (await dev.connectKnown()) {
+        this.device = dev;
+        this.setState({ connected: true, powered: true, status: "Connected: " + dev.name });
+      }
+    } catch (e) { /* not in range or not granted; stay disconnected */ }
+  }
   async connect() {
     if (!window.CG) return;
     const dev = new window.CG.GoveeDevice();
-    dev.onDisconnect = () => this.setState({ connected: false, status: "Disconnected" });
+    this.wireDevice(dev);
     this.setState({ status: "Connecting…" });
     try {
       await dev.connect();
@@ -701,25 +774,56 @@ class Component extends DCLogic {
   }
 
   // ---------- mutations ----------
+  // Rolling recent-colors list: newest first, deduped, capped at RECENT_MAX.
+  addRecent(c) { return [c].concat(this.state.recent.filter((x) => x !== c)).slice(0, this.RECENT_MAX); }
+  // Record a color as recently-used. Called when a color is actually committed
+  // to the canvas (painting), NOT when it's merely selected — so dragging the
+  // color picker across hues doesn't flood the recents.
+  useColor(c) { if (c && this.state.recent[0] !== c) this.setState({ recent: this.addRecent(c) }, this._persist); }
   setSelected(c) { this.setState({ selected: c, erasing: false }, this._persist); }
-  setErasing(v) { this.setState({ erasing: v }); }
-  selectPen() { this.setState({ erasing: false }); }
-  selectEraser() { this.setState({ erasing: true }); }
+  setErasing(v) { this.selectTool(v ? "eraser" : "brush"); }
+  // tool = brush | eraser | bucket | line | rect | eyedropper | select.
+  // erasing stays in sync so existing swatch/eraser-button styling keeps working.
+  selectTool(t) { this.setState({ tool: t, erasing: t === "eraser", dragCells: null, selection: t === "select" ? this.state.selection : null }); }
+  selectPen() { this.selectTool("brush"); }
+  selectEraser() { this.selectTool("eraser"); }
+  setBrushSize(n) { this.setState({ brushSize: Math.max(1, Math.min(8, Math.round(n) || 1)) }); }
   setSections(sections) {
     const total = this.totalSegments(sections);
     const colors = Array.from({ length: total }, (_, i) => this.state.colors[i] != null ? this.state.colors[i] : null);
     const bright = Array.from({ length: total }, (_, i) => this.state.bright[i] != null ? this.state.bright[i] : 100);
-    this.setState({ sections, colors, bright }, this._persist);
+    // Section count/length changes the logical→physical mapping and the array
+    // size, so re-push so the device matches the editor (like reverse/snake).
+    this.setState({ sections, colors, bright }, () => { this._persist(); this.push(); });
   }
   setRows(n) { this.setState({ rows: Math.max(1, Math.min(45, n || 1)) }, () => { this._persist(); this.push(); }); }
   setBrightness(n) { this.setState({ brightness: Math.max(0, Math.min(100, Math.round(n))) }, () => { this._persist(); this.push(); }); }
   setBrushBright(n) { this.setState({ brushBright: Math.max(0, Math.min(100, Math.round(n))) }); }
   setCellBright(logical, v) { const bright = this.state.bright.slice(); bright[logical] = Math.max(0, Math.min(100, v)); this.setState({ bright }); }
-  setEffect(n) { this.setState({ effect: n }, () => { this._persist(); this.push(); }); }
+  snapshot() {
+    this.undoStack.push({ colors: this.state.colors.slice(), bright: this.state.bright.slice() });
+    if (this.undoStack.length > 50) this.undoStack.shift();
+    this.redoStack = [];
+  }
+  undo() {
+    if (!this.undoStack.length) return;
+    this.redoStack.push({ colors: this.state.colors.slice(), bright: this.state.bright.slice() });
+    const s = this.undoStack.pop();
+    this.setState({ colors: s.colors.slice(), bright: s.bright.slice() }, () => this.push());
+  }
+  redo() {
+    if (!this.redoStack.length) return;
+    this.undoStack.push({ colors: this.state.colors.slice(), bright: this.state.bright.slice() });
+    const s = this.redoStack.pop();
+    this.setState({ colors: s.colors.slice(), bright: s.bright.slice() }, () => this.push());
+  }
+  setEffect(n) { this.setState({ effect: n }, () => { this._persist(); this.push(); this.startEffectPreview(); }); }
   setSpeed(n) { this.setState({ speed: Math.max(1, Math.min(100, Math.round(n))) }, () => { this._persist(); this.push(); }); }
-  toggleTranspose() { this.setState({ transpose: !this.state.transpose }, this._persist); }
-  toggleFlipH() { this.setState({ flipH: !this.state.flipH }, this._persist); }
-  toggleFlipV() { this.setState({ flipV: !this.state.flipV }, this._persist); }
+  // Orientation toggles re-map the editor view; push too so the device stays in
+  // sync with what's on screen (matches reverse/snake/run-length behavior).
+  toggleTranspose() { this.setState({ transpose: !this.state.transpose }, () => { this._persist(); this.push(); }); }
+  toggleFlipH() { this.setState({ flipH: !this.state.flipH }, () => { this._persist(); this.push(); }); }
+  toggleFlipV() { this.setState({ flipV: !this.state.flipV }, () => { this._persist(); this.push(); }); }
 
   addSection() { if (this.state.sections.length >= 2) return; this.setSections(this.state.sections.concat([{ length: 44, reversed: false, serpentine: false }])); }
   removeSection(i) { if (this.state.sections.length <= 1) return; this.setSections(this.state.sections.filter((_, idx) => idx !== i)); }
@@ -727,25 +831,105 @@ class Component extends DCLogic {
   toggleReverse(i) { this.setState({ sections: this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { reversed: !s.reversed }) : s) }, () => { this._persist(); this.push(); }); }
   toggleSerpentine(i) { this.setState({ sections: this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { serpentine: !s.serpentine }) : s) }, () => { this._persist(); this.push(); }); }
 
-  applyCell(logical) {
-    const colors = this.state.colors.slice();
-    const bright = this.state.bright.slice();
-    if (this.state.erasing) { colors[logical] = null; }
-    else { colors[logical] = this.state.selected; bright[logical] = this.state.brushBright; }
+  // Paint a brushSize×brushSize block centered on visual cell (vx,vy).
+  paintCells(vx, vy) {
+    const d = this.dims(), orient = this.orient();
+    const r = Math.floor((this.state.brushSize - 1) / 2);
+    const colors = this.state.colors.slice(), bright = this.state.bright.slice();
+    const erasing = this.state.tool === "eraser";
+    for (let yy = vy - r; yy <= vy + r; yy++) for (let xx = vx - r; xx <= vx + r; xx++) {
+      if (xx < 0 || yy < 0 || xx >= d.w || yy >= d.h) continue;
+      const lg = this.visualToLogical(xx, yy, d.width, this.state.rows, orient);
+      if (lg >= d.total) continue;
+      if (erasing) colors[lg] = null;
+      else { colors[lg] = this.state.selected; bright[lg] = this.state.brushBright; }
+    }
     this.setState({ colors, bright });
+    if (!erasing) this.useColor(this.state.selected);
   }
-  applyDesign(next) { const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, i) => next[i] != null ? next[i] : null); const bright = new Array(total).fill(100); this.setState({ colors, bright }, () => this.push()); }
+  // Flood-fill the contiguous region of same-color cells reachable from (vx,vy).
+  bucketFill(vx, vy) {
+    const d = this.dims(), orient = this.orient();
+    const at = (x, y) => { const lg = this.visualToLogical(x, y, d.width, this.state.rows, orient); return lg < d.total ? lg : -1; };
+    const start = at(vx, vy); if (start < 0) return;
+    const target = this.state.colors[start] || null;
+    const repl = this.state.selected;
+    if (target === repl) return;
+    const colors = this.state.colors.slice(), bright = this.state.bright.slice();
+    const stack = [[vx, vy]], seen = new Set();
+    while (stack.length) {
+      const [x, y] = stack.pop(), key = x + "," + y;
+      if (seen.has(key) || x < 0 || y < 0 || x >= d.w || y >= d.h) continue;
+      seen.add(key);
+      const lg = at(x, y); if (lg < 0 || (colors[lg] || null) !== target) continue;
+      colors[lg] = repl; bright[lg] = this.state.brushBright;
+      stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+    this.setState({ colors, bright });
+    this.useColor(repl);
+  }
+  // Eyedropper: copy a cell as a vivid base hue + a brightness level (instead of
+  // the flat, possibly-muddy stored color). A dim/dark cell becomes a full-value
+  // color plus a lower brush brightness, so you can paint it bright or re-dim it.
+  // base × brightness reproduces the cell's original look. Then return to brush.
+  eyedropCell(logical) {
+    const c = this.state.colors[logical];
+    if (c) {
+      const cellB = this.state.bright[logical] != null ? this.state.bright[logical] : 100;
+      const { base, value } = window.CG.decomposeColor(c);
+      const bright = Math.max(0, Math.min(100, Math.round(value * cellB)));
+      this.setState({ selected: base, brushBright: bright, tool: "brush", erasing: false }, this._persist);
+    } else this.setState({ tool: "brush", erasing: false });
+  }
+  // Cells covered by a line or rectangle-outline from a→b (visual coords).
+  shapeCells(a, b, kind) { return window.CG.shapeCells(a, b, kind); }
+  beginShape(vx, vy) { this.dragStart = { vx, vy }; this.painting = "shape"; this.updateDrag(vx, vy); }
+  updateDrag(vx, vy) {
+    const a = this.dragStart; if (!a) return;
+    const t = this.state.tool, d = this.dims(), orient = this.orient();
+    let pts = [];
+    if (t === "select") {
+      const x0 = Math.min(a.vx, vx), x1 = Math.max(a.vx, vx), y0 = Math.min(a.vy, vy), y1 = Math.max(a.vy, vy);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) pts.push({ vx: x, vy: y });
+    } else pts = this.shapeCells(a, { vx, vy }, t);
+    const logicals = [];
+    for (const p of pts) { const lg = this.visualToLogical(p.vx, p.vy, d.width, this.state.rows, orient); if (lg < d.total) logicals.push(lg); }
+    this.setState({ dragCells: logicals });
+  }
+  endDrag() {
+    const t = this.state.tool, dc = this.state.dragCells;
+    this.painting = false; this.dragStart = null;
+    if (!dc || !dc.length) { this.setState({ dragCells: null }); return; }
+    if (t === "select") { this.setState({ selection: dc.slice(), dragCells: null }); return; }
+    this.snapshot();
+    const colors = this.state.colors.slice(), bright = this.state.bright.slice();
+    for (const lg of dc) { colors[lg] = this.state.selected; bright[lg] = this.state.brushBright; }
+    this.setState({ colors, bright, dragCells: null }, () => this.push());
+    this.useColor(this.state.selected);
+  }
+  fillSelection(color) {
+    const sel = this.state.selection; if (!sel || !sel.length) return;
+    this.snapshot();
+    const colors = this.state.colors.slice(), bright = this.state.bright.slice();
+    for (const lg of sel) { colors[lg] = color; if (color) bright[lg] = this.state.brushBright; }
+    this.setState({ colors, bright }, () => this.push());
+    this.useColor(color);
+  }
+  clearSelection() { this.setState({ selection: null }); }
+  applyDesign(next) { this.snapshot(); const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, i) => next[i] != null ? next[i] : null); const bright = new Array(total).fill(100); this.setState({ colors, bright }, () => this.push()); }
   clear() {
+    this.snapshot();
     const total = this.totalSegments(this.state.sections);
     this.setState({ colors: new Array(total).fill(null), bright: new Array(total).fill(100), effect: 0x13 });
     if (this.animRunning) { this.animRunning = false; this.setState({ animationId: null, previewColors: null }); }
+    this.stopEffectPreview();
     this.sceneGen++;
     if (this.device && this.device.connected) { this.setState({ status: "Cleared" }); this.queueScene(() => this.device.setScene([], { dir: 0x13, bg: [0, 0, 0] })); }
   }
-  fillAll() { const total = this.totalSegments(this.state.sections); this.setState({ colors: new Array(total).fill(this.state.selected), bright: new Array(total).fill(this.state.brushBright) }, () => this.push()); }
+  fillAll() { this.snapshot(); const total = this.totalSegments(this.state.sections); this.setState({ colors: new Array(total).fill(this.state.selected), bright: new Array(total).fill(this.state.brushBright) }, () => this.push()); this.useColor(this.state.selected); }
 
   buildPattern(fn) {
-    const { sections, rows, transpose, flipH, flipV, selected } = this.state;
+    const { sections, rows, transpose, flipH, flipV, selected, gradColor } = this.state;
     const total = this.totalSegments(sections);
     const width = this.gridWidth(total, rows);
     const d = this.gridDims(width, rows, transpose);
@@ -753,7 +937,7 @@ class Component extends DCLogic {
     for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
       const logical = this.visualToLogical(vx, vy, width, rows, { transpose, flipH, flipV });
       if (logical >= total) continue;
-      colors[logical] = fn(vx, vy, d.w, d.h, selected);
+      colors[logical] = fn(vx, vy, d.w, d.h, selected, gradColor);
     }
     this.applyDesign(colors);
   }
@@ -791,6 +975,7 @@ class Component extends DCLogic {
     this.animRunning = false;
   }
   startAnimation(id) {
+    this.stopEffectPreview();
     this.playbackFrames = null;
     this.setState({ animationId: id });
     this.animFrame = 0;
@@ -798,6 +983,7 @@ class Component extends DCLogic {
   }
   playFrames(frames) {
     if (!frames.length) return;
+    this.stopEffectPreview();
     this.playbackFrames = frames;
     this.setState({ animationId: "__frames__" });
     this.animFrame = 0;
@@ -805,12 +991,34 @@ class Component extends DCLogic {
   }
   stopAnimation() {
     this.animRunning = false; this.playbackFrames = null;
-    this.setState({ animationId: null, previewColors: null }, () => this.push());
+    this.setState({ animationId: null, previewColors: null }, () => { this.push(); this.startEffectPreview(); });
+  }
+  // On-canvas approximation of an on-device motion effect (cosmetic only — the
+  // real effect runs on the controller). Breathe pulses, Flash blinks, the
+  // rotation effects sweep brightness across columns. Static = no preview.
+  startEffectPreview() {
+    this.stopEffectPreview();
+    const kind = { 20: "breathe", 15: "flash", 9: "spin", 10: "spin" }[this.state.effect];
+    if (!kind || this.animRunning) return;
+    this.fxFrame = 0;
+    this.fxTimer = setInterval(() => {
+      const colors = this.state.colors;
+      if (!colors.some(Boolean)) { return; }
+      const f = this.fxFrame++;
+      let preview;
+      if (kind === "breathe") { const t = (Math.sin(f * 0.25) + 1) / 2; preview = colors.map((c) => (c ? this.dim(c, 0.12 + 0.88 * t) : null)); }
+      else if (kind === "flash") { const on = f % 2 === 0; preview = colors.map((c) => (c ? (on ? c : this.dim(c, 0.05)) : null)); }
+      else { const rows = this.state.rows; preview = colors.map((c, p) => { if (!c) return null; const col = Math.floor(p / Math.max(1, rows)); const t = (Math.sin(col * 0.6 - f * 0.35) + 1) / 2; return this.dim(c, 0.25 + 0.75 * t); }); }
+      this.setState({ previewColors: preview });
+    }, 110);
+  }
+  stopEffectPreview() {
+    if (this.fxTimer) { clearInterval(this.fxTimer); this.fxTimer = null; if (!this.animRunning) this.setState({ previewColors: null }); }
   }
 
   // ---------- scenes ----------
-  saveScene() { const n = this.state.sceneName.trim(); if (!n) return; const scene = { name: n, colors: this.state.colors.slice() }; this.setState({ scenes: this.state.scenes.filter((s) => s.name !== n).concat([scene]), sceneName: "" }, this._persist); }
-  loadScene(i) { const sc = this.state.scenes[i]; if (!sc) return; const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, k) => sc.colors[k] != null ? sc.colors[k] : null); const bright = new Array(total).fill(100); this.setState({ colors, bright }, () => this.push()); }
+  saveScene() { const n = this.state.sceneName.trim(); if (!n) return; const scene = { name: n, colors: this.state.colors.slice(), bright: this.state.bright.slice() }; this.setState({ scenes: this.state.scenes.filter((s) => s.name !== n).concat([scene]), sceneName: "" }, this._persist); }
+  loadScene(i) { const sc = this.state.scenes[i]; if (!sc) return; this.snapshot(); const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, k) => sc.colors[k] != null ? sc.colors[k] : null); const bright = Array.from({ length: total }, (_, k) => (sc.bright && sc.bright[k] != null) ? sc.bright[k] : 100); this.setState({ colors, bright }, () => this.push()); }
   deleteScene(i) { this.setState({ scenes: this.state.scenes.filter((_, idx) => idx !== i) }, this._persist); }
   exportScenes() {
     const data = JSON.stringify({ app: "cloudgrid", scenes: this.state.scenes }, null, 2);
@@ -845,7 +1053,7 @@ class Component extends DCLogic {
       adjust: { sat: over && over.sat != null ? over.sat : this.state.imgSat, bright: over && over.bright != null ? over.bright : this.state.imgBright, contrast: over && over.contrast != null ? over.contrast : this.state.imgContrast },
     });
     const colors = window.CG.sampleSource(this.imgEl, this.imgW, this.imgH, opts);
-    this.applyDesign(colors);
+    this.applyDesign(this.snapColors(colors));
   }
   onChooseImage(e) {
     const f = e.target.files && e.target.files[0]; if (!f) return;
@@ -892,26 +1100,49 @@ class Component extends DCLogic {
       this.playFrames(frames);
     } catch (err) { this.setState({ mediaStatus: "Failed: " + err.message }); }
   }
+  // One uploader for everything: route animated formats (gif/webp/apng/video)
+  // to the frame sampler, still images to the single-shot sampler.
+  onChooseAnyMedia(e) {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (f.type.indexOf("video/") === 0 || /gif|webp|apng/i.test(f.type)) this.onChooseMedia(e);
+    else this.onChooseImage(e);
+  }
 
   // ---------- AI ----------
+  // Convert an AI grid (rows × cols of hex|null) into a logical-color array,
+  // honoring orientation and the approved-palette snap.
+  gridToLogical(grid) {
+    const d = this.dims();
+    const colors = new Array(d.total).fill(null);
+    for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
+      const logical = this.visualToLogical(vx, vy, d.width, this.state.rows, this.orient());
+      if (logical >= d.total) continue;
+      colors[logical] = (grid && grid[vy] && grid[vy][vx]) || null;
+    }
+    return this.snapColors(colors);
+  }
   async generateAI() {
     const prompt = this.state.aiPrompt.trim();
     if (!prompt || this.state.aiBusy) return;
     const d = this.dims();
-    this.setState({ aiBusy: true, aiStatus: "Generating…" });
+    const animated = this.state.aiAnimated;
+    this.setState({ aiBusy: true, aiStatus: animated ? "Generating animation…" : "Generating…" });
     try {
-      const res = await fetch("/api/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt, width: d.w, height: d.h }) });
+      const palette = this.state.paletteOn ? this.state.palette : null;
+      const body = JSON.stringify({ prompt, width: d.w, height: d.h, palette, animated, frames: animated ? 12 : 1 });
+      const res = await fetch("/api/generate", { method: "POST", headers: { "content-type": "application/json" }, body });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || ("HTTP " + res.status));
-      const grid = data.grid;
-      const colors = new Array(d.total).fill(null);
-      for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
-        const logical = this.visualToLogical(vx, vy, d.width, this.state.rows, this.orient());
-        if (logical >= d.total) continue;
-        colors[logical] = (grid && grid[vy] && grid[vy][vx]) || null;
+      if (animated && Array.isArray(data.frames)) {
+        const frames = data.frames.map((g) => this.gridToLogical(g));
+        if (!frames.length) throw new Error("no frames returned");
+        this.playFrames(frames);
+        this.setState({ aiStatus: "Playing " + frames.length + " frames" });
+      } else {
+        this.applyDesign(this.gridToLogical(data.grid));
+        this.setState({ aiStatus: "Done" });
       }
-      this.applyDesign(colors);
-      this.setState({ aiStatus: "Done" });
     } catch (e) { this.setState({ aiStatus: "Failed: " + e.message }); }
     finally { this.setState({ aiBusy: false }); }
   }
@@ -919,7 +1150,6 @@ class Component extends DCLogic {
   // ---------- ui ----------
   toggleMenu(m) { this.setState({ openMenu: this.state.openMenu === m ? null : m }); }
   closeMenus() { this.setState({ openMenu: null }); }
-  setTool(t) { this.setState({ tool: t }); }
   startDrag(e, key, sign) {
     e.preventDefault();
     const startX = e.clientX;
@@ -941,9 +1171,16 @@ class Component extends DCLogic {
   }
   toggleSection(k) { this.setState({ expanded: Object.assign({}, this.state.expanded, { [k]: !this.state.expanded[k] }) }); }
   toggleIndices() { this.setState({ showIndices: !this.state.showIndices, openMenu: null }); }
-  openCtx(e, logical) { e.preventDefault(); this.setState({ ctx: { x: e.clientX, y: e.clientY, logical }, openMenu: null }); }
+  openCtx(e, logical) { e.preventDefault(); this._ctxBrightSnapped = false; this.setState({ ctx: { x: e.clientX, y: e.clientY, logical }, palCtx: null, openMenu: null }); }
   closeCtx() { this.setState({ ctx: null }); }
-  ctxAct(fn) { fn(); this.setState({ ctx: null }); this.push(); }
+  // Per-cell brightness from the context-menu slider: one undo step per editing
+  // session (snapshot on first drag), then live state + device update.
+  setCtxCellBright(logical, v) {
+    if (!this._ctxBrightSnapped) { this.snapshot(); this._ctxBrightSnapped = true; }
+    this.setCellBright(logical, v);
+    this.push();
+  }
+  ctxAct(fn) { this.snapshot(); fn(); this.setState({ ctx: null }); this.push(); }
   fillSection(logical, color) {
     const si = this.sectionOfLogical(logical, this.state.sections);
     const colors = this.state.colors.slice();
@@ -980,10 +1217,10 @@ class Component extends DCLogic {
 
   renderVals() {
     const st = this.state;
+    const tipFor = (key) => (e) => this.showTip(e, key);
     const d = this.dims();
     const src = st.previewColors || st.colors;
     const litCount = st.colors.filter(Boolean).length;
-    const layout = st.layout;
 
     // ---- layout region styles (studio) ----
     let workspaceStyle, panelStyle, panelInnerStyle, canvasAreaStyle, inspectorStyle;
@@ -1002,35 +1239,18 @@ class Component extends DCLogic {
     const btnPrimary = { font: "inherit", fontSize: "12px", fontWeight: 600, padding: "8px 12px", borderRadius: "7px", cursor: "pointer", background: "#34cf6b", color: "#06210f", border: "1px solid #3ad876", whiteSpace: "nowrap" };
     const btnPrimaryGhost = { font: "inherit", fontSize: "12px", fontWeight: 500, padding: "8px 12px", borderRadius: "7px", cursor: "pointer", background: "rgba(52,207,107,0.12)", color: "#7ee6a3", border: "1px solid rgba(52,207,107,0.4)", textAlign: "center", display: "block" };
 
-    // ---- tabs ----
-    const tabs = this.TABS.map((t) => ({
-      label: t.label, onClick: () => this.setTool(t.key),
-      style: {
-        font: "inherit", fontSize: "12px", fontWeight: 500, padding: "6px 10px", borderRadius: "6px", cursor: "pointer", whiteSpace: "nowrap",
-        background: st.tool === t.key ? "rgba(52,207,107,0.14)" : "transparent",
-        color: st.tool === t.key ? "#7ee6a3" : "#8b94a3",
-        border: "1px solid " + (st.tool === t.key ? "rgba(52,207,107,0.4)" : "transparent"),
-      },
-    }));
-
     // ---- collapsible sections ----
     const exp = st.expanded;
     const secWrap = { borderBottom: "1px solid #1b1f26" };
     const secBody = { padding: "0 13px 14px", display: "flex", flexDirection: "column", gap: "10px" };
     const secHead = (open) => ({ display: "flex", alignItems: "center", gap: "9px", width: "100%", padding: "11px 13px", background: open ? "#12161c" : "transparent", border: "none", borderRadius: 0, cursor: "pointer", color: open ? "#e6e9ef" : "#aeb6c2", font: "inherit", fontSize: "11.5px", fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" });
     const secChev = (open) => ({ display: "inline-block", transition: "transform .15s ease", transform: open ? "rotate(90deg)" : "rotate(0deg)", color: "#5d6675", fontSize: "13px", width: "10px", flex: "none" });
-    const headPaint = secHead(exp.paint), chevPaint = secChev(exp.paint), tPaint = () => this.toggleSection("paint");
-    const headPatterns = secHead(exp.patterns), chevPatterns = secChev(exp.patterns), tPatterns = () => this.toggleSection("patterns");
+    const headDesigns = secHead(exp.designs), chevDesigns = secChev(exp.designs), tDesigns = () => this.toggleSection("designs");
     const headEffects = secHead(exp.effects), chevEffects = secChev(exp.effects), tEffects = () => this.toggleSection("effects");
     const headAnimate = secHead(exp.animate), chevAnimate = secChev(exp.animate), tAnimate = () => this.toggleSection("animate");
-    const headImport = secHead(exp.import), chevImport = secChev(exp.import), tImport = () => this.toggleSection("import");
-    const headAi = secHead(exp.ai), chevAi = secChev(exp.ai), tAi = () => this.toggleSection("ai");
-    const headScenes = secHead(exp.scenes), chevScenes = secChev(exp.scenes), tScenes = () => this.toggleSection("scenes");
-    const headCalibrate = secHead(exp.calibrate), chevCalibrate = secChev(exp.calibrate), tCalibrate = () => this.toggleSection("calibrate");
-    const headHelp = secHead(exp.help), chevHelp = secChev(exp.help), tHelp = () => this.toggleSection("help");
 
-    // ---- swatches ----
-    const swatches = this.SWATCHES.map((c) => ({
+    // ---- recent-color swatches ----
+    const swatches = st.recent.map((c) => ({
       color: c, onClick: () => this.setSelected(c),
       style: { width: "28px", height: "28px", padding: 0, borderRadius: "7px", cursor: "pointer", background: c, border: (st.selected === c && !st.erasing) ? "2px solid #fff" : "2px solid #2a2f38", boxShadow: "0 0 0 1px #0e1116" },
     }));
@@ -1045,6 +1265,9 @@ class Component extends DCLogic {
     cell = Math.max(12, Math.min(72, cell - maxGap));
     const gap = cell > 26 ? maxGap : cell > 16 ? 3 : minGap;
     const rad = cell > 22 ? "6px" : cell > 16 ? "5px" : "3px";
+    const dragSet = st.dragCells ? new Set(st.dragCells) : null;
+    const selSet = st.selection ? new Set(st.selection) : null;
+    const dragGhost = st.tool === "select" ? "rgba(52,207,107,0.28)" : st.selected;
     const cells = [];
     for (let k = 0; k < d.w * d.h; k++) {
       const vy = Math.floor(k / d.w), vx = k % d.w;
@@ -1053,17 +1276,30 @@ class Component extends DCLogic {
       const c = exists ? src[logical] : null;
       // Show per-cell brightness on the static canvas (animation previews carry
       // their own final colors, so don't re-dim those).
-      const cb = exists && !st.previewColors ? st.bright[logical] : null;
-      const shown = c && cb != null && cb < 100 ? this.dimHex(c, cb / 100) : c;
+      const cb = exists && !st.previewColors && st.bright[logical] != null ? st.bright[logical] / 100 : 1;
+      const t = (st.brightness / 100) * cb;
+      const shown = c && t < 1 ? this.dimHex(c, t) : c;
       const banded = exists && (this.sectionOfLogical(logical, st.sections) % 2 === 1);
       let style;
       if (!exists) style = { width: "100%", height: "100%", borderRadius: rad, background: "transparent", border: "1px solid transparent", cursor: "default" };
       else if (c) style = { width: "100%", height: "100%", borderRadius: rad, background: shown, border: "1px solid rgba(0,0,0,0.5)", cursor: "crosshair", display: "flex", alignItems: "center", justifyContent: "center" };
       else style = { width: "100%", height: "100%", borderRadius: rad, background: banded ? "#13171e" : "#0f141a", border: "1px solid #1b212a", boxShadow: banded ? "inset 0 0 0 9999px rgba(52,207,107,0.045)" : "none", cursor: "crosshair", display: "flex", alignItems: "center", justifyContent: "center" };
+      if (exists && dragSet && dragSet.has(logical)) style = Object.assign({}, style, { background: dragGhost, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)" });
+      else if (exists && selSet && selSet.has(logical)) style = Object.assign({}, style, { boxShadow: "inset 0 0 0 2px rgba(52,207,107,0.85)" });
       cells.push({
         key: k, idx: logical, showIdx: exists && st.showIndices, style,
-        onDown: exists ? ((e) => { if (e.button === 2) return; e.preventDefault(); this.painting = true; this.applyCell(logical); }) : (() => {}),
-        onEnter: exists ? (() => { if (this.painting) this.applyCell(logical); }) : (() => {}),
+        onDown: exists ? ((e) => {
+          if (e.button === 2) return; e.preventDefault();
+          const tool = this.state.tool;
+          if (tool === "bucket") { this.snapshot(); this.bucketFill(vx, vy); this.push(); }
+          else if (tool === "eyedropper") { this.eyedropCell(logical); }
+          else if (tool === "line" || tool === "rect" || tool === "select") { this.beginShape(vx, vy); }
+          else { this.snapshot(); this.painting = true; this.paintCells(vx, vy); }
+        }) : (() => {}),
+        onEnter: exists ? (() => {
+          if (this.painting === "shape") this.updateDrag(vx, vy);
+          else if (this.painting === true) this.paintCells(vx, vy);
+        }) : (() => {}),
         onCtx: exists ? ((e) => this.openCtx(e, logical)) : ((e) => e.preventDefault()),
       });
     }
@@ -1092,7 +1328,6 @@ class Component extends DCLogic {
 
     const ctx = st.ctx;
     const ctxStyle = ctx ? { position: "fixed", left: Math.min(ctx.x, (window.innerWidth || 1200) - 230) + "px", top: Math.min(ctx.y, (window.innerHeight || 800) - 250) + "px", width: "212px", background: "#14181e", border: "1px solid #2a313b", borderRadius: "9px", padding: "5px", boxShadow: "0 16px 44px rgba(0,0,0,0.6)", zIndex: 60, display: "flex", flexDirection: "column", gap: "1px" } : {};
-    const ctxColor = ctx ? src[ctx.logical] : null;
 
     return {
       // layout
@@ -1117,19 +1352,24 @@ class Component extends DCLogic {
       helpDropStyle: { position: "absolute", top: "calc(100% + 6px)", right: 0, width: "288px", background: "#14181e", border: "1px solid #2a313b", borderRadius: "9px", padding: "5px", boxShadow: "0 16px 44px rgba(0,0,0,0.55)", zIndex: 60 },
       dropStyle, dropItem, kbd: { fontFamily: "'JetBrains Mono',monospace", fontSize: "11px", color: "#5d6675" },
       mNew: () => { this.clear(); this.closeMenus(); },
-      mSave: () => { this.setState({ tool: "scenes", openMenu: null }); },
+      mSave: () => { this.setState({ expanded: Object.assign({}, this.state.expanded, { designs: true }), openMenu: null }); },
       mExport: () => { this.exportScenes(); this.closeMenus(); },
       mFill: () => { this.fillAll(); this.closeMenus(); },
       mClear: () => { this.clear(); this.closeMenus(); },
       mEraser: () => { this.setErasing(!st.erasing); this.closeMenus(); },
+      mPalette: () => { this.setState({ paletteModal: true, openMenu: null }); },
+      paletteModalOpen: st.paletteModal, closePaletteModal: () => this.setState({ paletteModal: false }), stopProp: (e) => e.stopPropagation(),
       erMark: checkMark(st.erasing), ixMark: checkMark(st.showIndices), tpMark: checkMark(st.transpose), fhMark: checkMark(st.flipH), fvMark: checkMark(st.flipV),
       mIndices: () => this.toggleIndices(), mTranspose: () => { this.toggleTranspose(); this.closeMenus(); }, mFlipH: () => { this.toggleFlipH(); this.closeMenus(); }, mFlipV: () => { this.toggleFlipV(); this.closeMenus(); },
       // collapsible sections
       expanded: st.expanded, secWrap, secBody,
-      headPaint, chevPaint, tPaint, headPatterns, chevPatterns, tPatterns, headEffects, chevEffects, tEffects, headAnimate, chevAnimate, tAnimate, headImport, chevImport, tImport, headAi, chevAi, tAi, headScenes, chevScenes, tScenes, headCalibrate, chevCalibrate, tCalibrate, headHelp, chevHelp, tHelp,
+      headDesigns, chevDesigns, tDesigns, headEffects, chevEffects, tEffects, headAnimate, chevAnimate, tAnimate,
       shortcuts: [
         { keys: ["B"], label: "Brush tool" },
         { keys: ["E", "X"], label: "Eraser tool" },
+        { keys: ["G"], label: "Bucket fill tool" },
+        { keys: ["L"], label: "Line tool" },
+        { keys: ["R"], label: "Rectangle tool" },
         { keys: ["C"], label: "Open color picker" },
         { keys: ["F"], label: "Fill all with color" },
         { keys: ["I"], label: "Toggle segment indices" },
@@ -1139,21 +1379,54 @@ class Component extends DCLogic {
       kbdChip: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "6px", background: "#0b0d10", border: "1px solid #2a313b", borderBottomWidth: "2px", fontFamily: "'JetBrains Mono',monospace", fontSize: "11px", fontWeight: 600, color: "#cfd6e0" },
       // paint
       selected: st.selected, selectedUpper: st.selected.toUpperCase(), onColorInput: (e) => this.setSelected(e.target.value),
-      swatches, eraserBtn: this._btn(st.erasing),
+      swatches,
       brushBright: st.brushBright, onBrushBright: (e) => this.setBrushBright(Number(e.target.value)),
-      ctxBrights: [100, 75, 50, 25].map((v) => ({ label: v + "%", onClick: () => this.ctxAct(() => this.setCellBright(ctx.logical, v)) })),
+      ctxCellBright: ctx ? (st.bright[ctx.logical] != null ? st.bright[ctx.logical] : 100) : 100,
+      onCtxCellBright: (e) => this.setCtxCellBright(ctx.logical, Number(e.target.value)),
+      undo: () => this.undo(), redo: () => this.redo(),
+      undoBtn: Object.assign({}, btnGhost, { opacity: this.undoStack.length ? 1 : 0.4 }),
+      redoBtn: Object.assign({}, btnGhost, { opacity: this.redoStack.length ? 1 : 0.4 }),
+      gradColor: st.gradColor, onGradColor: (e) => this.setState({ gradColor: e.target.value }, this._persist),
+      // approved palette
+      paletteOn: st.paletteOn, onTogglePalette: () => this.togglePalette(),
+      paletteToggleLabel: st.paletteOn ? "On" : "Off",
+      paletteToggleBtn: this._btn(st.paletteOn, { fs: "11.5px", pad: "4px 11px" }),
+      onAddPalette: () => this.addPaletteColor(), onResetPalette: () => this.resetPalette(),
+      onCopyPalette: () => this.copyPalette(),
+      onImportPalette: async (e) => { const f = e.target.files && e.target.files[0]; if (f) this.importPalette(await f.text()); e.target.value = ""; },
+      // hover-help tooltips
+      tipOn: { patterns: tipFor("patterns"), effects: tipFor("effects"), animate: tipFor("animate"), media: tipFor("media"), ai: tipFor("ai"), calibrate: tipFor("calibrate") },
+      hideTip: () => this.hideTip(),
+      helpIcon: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: "14px", height: "14px", borderRadius: "50%", border: "1px solid #3a4250", color: "#8b94a3", fontSize: "9px", fontWeight: 700, fontStyle: "italic", fontFamily: "Georgia, 'Times New Roman', serif", cursor: "help", flex: "none", lineHeight: 1, userSelect: "none" },
+      tipOpen: st.tip != null,
+      tipText: st.tip ? st.tip.text : "",
+      tipStyle: st.tip ? { position: "fixed", left: st.tip.x + "px", top: st.tip.y + "px", transform: "translate(-50%, calc(-100% - 10px))", width: "232px", background: "#1b2027", border: "1px solid #2a313b", borderRadius: "8px", padding: "9px 11px", fontSize: "11.5px", lineHeight: "1.5", color: "#aeb6c2", boxShadow: "0 12px 32px rgba(0,0,0,0.55)", zIndex: 80, pointerEvents: "none" } : {},
+      palette: st.palette.map((c) => ({
+        color: c, title: c.toUpperCase() + " (click to use, right-click to manage)",
+        onClick: () => this.setSelected(c), onCtx: (e) => this.openPalCtx(e, c),
+        style: { width: "26px", height: "26px", padding: 0, borderRadius: "7px", cursor: "pointer", background: c, border: (st.selected === c && !st.erasing) ? "2px solid #fff" : "2px solid #2a2f38", boxShadow: "0 0 0 1px #0e1116" },
+      })),
       // floating dock
-      selectPen: () => this.selectPen(), selectEraser: () => this.selectEraser(),
       colorInputRef: (el) => { this._colorInput = el; },
-      penBtn: this._dockBtn(!st.erasing), eraserToolBtn: this._dockBtn(st.erasing),
-      colorToolBtn: { position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: "34px", height: "34px", borderRadius: "9px", cursor: "pointer", background: "#181c23", border: "1px solid #2a313b", overflow: "hidden" },
-      colorToolSwatch: { width: "20px", height: "20px", borderRadius: "6px", background: st.selected, boxShadow: "0 0 0 1px rgba(0,0,0,0.4), 0 0 10px " + st.selected, pointerEvents: "none" },
+      // tool dock
+      onToolBrush: () => this.selectTool("brush"), onToolEraser: () => this.selectTool("eraser"),
+      onToolBucket: () => this.selectTool("bucket"), onToolLine: () => this.selectTool("line"),
+      onToolRect: () => this.selectTool("rect"), onToolEyedrop: () => this.selectTool("eyedropper"),
+      onToolSelect: () => this.selectTool("select"),
+      toolBrushBtn: this._dockBtn(st.tool === "brush"), toolEraserBtn: this._dockBtn(st.tool === "eraser"),
+      toolBucketBtn: this._dockBtn(st.tool === "bucket"), toolLineBtn: this._dockBtn(st.tool === "line"),
+      toolRectBtn: this._dockBtn(st.tool === "rect"), toolEyedropBtn: this._dockBtn(st.tool === "eyedropper"),
+      toolSelectBtn: this._dockBtn(st.tool === "select"),
+      // tool options bar
+      brushSize: st.brushSize, onBrushSize: (e) => this.setBrushSize(Number(e.target.value)),
+      hasSelection: st.selection != null,
+      fillSel: () => this.fillSelection(st.selected), clearSel: () => this.fillSelection(null), deselect: () => this.clearSelection(),
       // patterns
       patterns: this.PATTERNS.map((p) => ({ label: p.label, onClick: () => this.buildPattern(p.fn) })),
       // effects
       effects: this.EFFECTS.map((e) => ({ label: e.label, style: this._btn(st.effect === e.dir), onClick: () => this.setEffect(e.dir) })),
-      effect: st.effect, effectHex: "0x" + st.effect.toString(16).padStart(2, "0"), effectName,
-      onEffectByte: (e) => this.setEffect(Number(e.target.value)), numInput, numInputSm,
+      effectHex: "0x" + st.effect.toString(16).padStart(2, "0"), effectName,
+      numInput, numInputSm,
       // animate
       anims: this.ANIMATIONS.map((a) => ({ label: a.label, style: this._btn(st.animationId === a.id), onClick: () => this.startAnimation(a.id) })),
       stopAnim: () => this.stopAnimation(), animating: st.animationId != null,
@@ -1165,12 +1438,13 @@ class Component extends DCLogic {
       onImgSat: (e) => { const v = Number(e.target.value); this.setState({ imgSat: v }, () => this.resampleImage({ sat: v })); },
       onImgBright: (e) => { const v = Number(e.target.value); this.setState({ imgBright: v }, () => this.resampleImage({ bright: v })); },
       onImgContrast: (e) => { const v = Number(e.target.value); this.setState({ imgContrast: v }, () => this.resampleImage({ contrast: v })); },
-      onChooseImage: (e) => this.onChooseImage(e), onChooseMedia: (e) => this.onChooseMedia(e), mediaStatus: st.mediaStatus,
+      onChooseImage: (e) => this.onChooseImage(e), onChooseMedia: (e) => this.onChooseMedia(e), onChooseAnyMedia: (e) => this.onChooseAnyMedia(e), mediaStatus: st.mediaStatus,
       orient: d.w > d.h ? "landscape" : d.w < d.h ? "portrait" : "square",
       sliderRow, sliderLab, sliderVal, textInput,
       // ai
       aiPrompt: st.aiPrompt, onAiPrompt: (e) => this.setState({ aiPrompt: e.target.value }), onAiKey: (e) => { if (e.key === "Enter") this.generateAI(); },
-      generateAI: () => this.generateAI(), aiStatus: st.aiStatus, aiBtnLabel: st.aiBusy ? "Generating…" : "Generate",
+      generateAI: () => this.generateAI(), aiStatus: st.aiStatus, aiBtnLabel: st.aiBusy ? "Generating…" : (st.aiAnimated ? "Generate animation" : "Generate"),
+      aiAnimated: st.aiAnimated, onAiAnimated: (e) => this.setState({ aiAnimated: e.target.checked }),
       // scenes
       sceneName: st.sceneName, onSceneName: (e) => this.setState({ sceneName: e.target.value }), onSceneKey: (e) => { if (e.key === "Enter") this.saveScene(); },
       saveScene: () => this.saveScene(),
@@ -1195,15 +1469,22 @@ class Component extends DCLogic {
       // inspector
       brightness: st.brightness, onBright: (e) => this.setBrightness(Number(e.target.value)),
       speed: st.speed, onSpeed: (e) => this.setSpeed(Number(e.target.value)),
-      statRow, statLab, statVal, sceneSectionCount: st.sections.length,
+      statRow, statLab, statVal,
       // context menu
       ctxOpen: ctx != null, ctxStyle, closeCtx: () => this.closeCtx(),
       ctxSwatchBg: { background: st.selected },
-      ctxPaint: () => this.ctxAct(() => { const cs = this.state.colors.slice(); cs[ctx.logical] = st.selected; this.setState({ colors: cs }); }),
+      ctxPaint: () => this.ctxAct(() => { const cs = this.state.colors.slice(); cs[ctx.logical] = st.selected; this.setState({ colors: cs }); this.useColor(st.selected); }),
       ctxErase: () => this.ctxAct(() => { const cs = this.state.colors.slice(); cs[ctx.logical] = null; this.setState({ colors: cs }); }),
-      ctxEyedrop: () => { if (ctxColor) this.setSelected(ctxColor); this.setState({ ctx: null }); },
+      ctxEyedrop: () => { this.eyedropCell(ctx.logical); this.setState({ ctx: null }); },
       ctxFillSection: () => this.ctxAct(() => this.fillSection(ctx.logical, st.selected)),
       ctxClearSection: () => this.ctxAct(() => this.fillSection(ctx.logical, null)),
+      // palette swatch context menu
+      palCtxOpen: st.palCtx != null,
+      palCtxStyle: st.palCtx ? { position: "fixed", left: Math.min(st.palCtx.x, (window.innerWidth || 1200) - 220) + "px", top: Math.min(st.palCtx.y, (window.innerHeight || 800) - 120) + "px", width: "200px", background: "#14181e", border: "1px solid #2a313b", borderRadius: "9px", padding: "5px", boxShadow: "0 16px 44px rgba(0,0,0,0.6)", zIndex: 100, display: "flex", flexDirection: "column", gap: "1px" } : {},
+      palCtxSwatchBg: { background: st.palCtx ? st.palCtx.color : "transparent" },
+      closePalCtx: () => this.closePalCtx(),
+      palCtxSetActive: () => { if (st.palCtx) this.setSelected(st.palCtx.color); this.setState({ palCtx: null }); },
+      palCtxRemove: () => { if (st.palCtx) this.removePaletteColor(st.palCtx.color); this.setState({ palCtx: null }); },
     };
   }
 }
