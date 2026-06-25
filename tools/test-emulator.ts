@@ -134,12 +134,12 @@ function sceneFrame(meta: any, f: number, total: number) {
       out[p] = CG.lerpHex(pal[i], pal[j], x - Math.floor(x));
     }
   } else {
-    const spacing = Math.max(3, Math.round(total / Math.max(8, pal.length * 5)));
-    const dots = Math.ceil(total / spacing);
-    const offset = f * 0.5 * speedF;
-    for (let i = 0; i < dots; i++) {
-      const pos = ((Math.round(i * spacing + offset) % total) + total) % total;
-      out[pos] = pal[i % pal.length];
+    const len = pal.length;
+    const blockW = Math.max(1, Math.round(total / 30)); // ~30 dots around the grid
+    const scroll = f * 0.6 * speedF;
+    for (let p = 0; p < total; p++) {
+      const idx = Math.floor((p + scroll) / blockW);
+      out[p] = pal[((idx % len) + len) % len];
     }
   }
   return out;
@@ -153,16 +153,18 @@ try {
     const meta = CG.decodeParametricScene(sc.pkts);
     if (!meta || !meta.palette.length) continue;
     const total = 88;
-    let bad = false, sawPalette = false;
+    let bad = false, sawPalette = false, fills = true;
     const palSet = new Set(meta.palette.map(rgbHex));
     for (const f of [0, 1, 7, 23, 99]) {
       const frame = sceneFrame(meta, f, total);
       if (frame.length !== total || frame.some((c) => !isHexOrNull(c))) { bad = true; break; }
       if (frame.some((c) => c && palSet.has(c))) sawPalette = true;
+      if (frame.some((c) => c === null)) fills = false; // every cell lit?
     }
+    // Both families fill the entire grid (these scenes light every segment).
     // type-1 gradient blends between stops, so exact palette hits aren't required;
     // type 2/5 place palette colors directly, so they must appear.
-    if (bad || (meta.type !== 1 && !sawPalette)) { genFail++; console.error(`FAIL scene-gen ${sc.label}: bad=${bad} sawPalette=${sawPalette} type=${meta.type}`); }
+    if (bad || !fills || (meta.type !== 1 && !sawPalette)) { genFail++; console.error(`FAIL scene-gen ${sc.label}: bad=${bad} fills=${fills} sawPalette=${sawPalette} type=${meta.type}`); }
   }
   console.log(`scene-preview generator: ${arr.filter((s: any) => CG.decodeParametricScene(s.pkts)?.palette.length).length - genFail} scenes valid`);
 } catch (e) { console.error("scene-gen check skipped:", String(e)); genFail++; }
