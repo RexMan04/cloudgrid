@@ -74,11 +74,30 @@ function assertGridShape(arr: unknown, w: number, h: number, label = "grid"): as
   }
 }
 
+// Find the first balanced "[...]" that actually parses to an array-of-arrays
+// (our grid/frames shape), tolerating prose or code fences around it. More
+// robust than first-"[" ... last-"]" (which a stray bracket in prose corrupts)
+// and than the first balanced span (which a prose token like "[note]" steals):
+// candidates that don't JSON-parse, or parse to a scalar array, are skipped.
+function firstJsonArray(text: string): unknown[] {
+  for (let i = text.indexOf("["); i >= 0; i = text.indexOf("[", i + 1)) {
+    let depth = 0, end = -1;
+    for (let j = i; j < text.length; j++) {
+      const ch = text[j];
+      if (ch === "[") depth++;
+      else if (ch === "]" && --depth === 0) { end = j; break; }
+    }
+    if (end < 0) break; // no balanced close from here on
+    try {
+      const parsed = JSON.parse(text.slice(i, end + 1));
+      if (Array.isArray(parsed) && parsed.length > 0 && Array.isArray(parsed[0])) return parsed;
+    } catch { /* not valid JSON from this "[" — try the next one */ }
+  }
+  throw new Error("AI did not return a JSON array");
+}
+
 function extractGrid(text: string, w: number, h: number): (string | null)[][] {
-  const start = text.indexOf("[");
-  const end = text.lastIndexOf("]");
-  if (start < 0 || end < 0) throw new Error("AI did not return a JSON grid");
-  const arr = JSON.parse(text.slice(start, end + 1));
+  const arr = firstJsonArray(text);
   assertGridShape(arr, w, h);
   const norm = (v: unknown): string | null => {
     if (typeof v !== "string") return null;
@@ -112,10 +131,7 @@ function buildAnimPrompt(desc: string, w: number, h: number, frames: number, pal
 }
 
 function extractFrames(text: string, w: number, h: number): (string | null)[][][] {
-  const start = text.indexOf("[");
-  const end = text.lastIndexOf("]");
-  if (start < 0 || end < 0) throw new Error("AI did not return a JSON animation");
-  const arr = JSON.parse(text.slice(start, end + 1));
+  const arr = firstJsonArray(text);
   if (!Array.isArray(arr)) throw new Error("AI animation was not an array of frames");
   const norm = (v: unknown): string | null => {
     if (typeof v !== "string") return null;
@@ -140,8 +156,13 @@ function extractFrames(text: string, w: number, h: number): (string | null)[][][
 // generously so a large grid (or multi-frame animation) isn't truncated, but
 // cap it so a pathological request can't ask for an enormous, slow response.
 // The cap (16384) is the safe shared ceiling across the providers below.
+// Per-cell token rate and the hard cap are env-tunable so a larger grid (or a
+// future controller that supports more segments) can be dialed up, and a small
+// setup can dial it down. Defaults suit the H703B's small (<=90-cell) grids.
 function outputTokenBudget(w: number, h: number, frames = 1): number {
-  return Math.min(16384, 700 + Math.ceil(w * h * frames * 9));
+  const perCell = Number(process.env.GOVEE_AI_TOKENS_PER_CELL) || 9;
+  const cap = Number(process.env.GOVEE_AI_TOKEN_CAP) || 16384;
+  return Math.min(cap, 700 + Math.ceil(w * h * frames * perCell));
 }
 
 // One model call. Returns the raw text the model produced.

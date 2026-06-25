@@ -17,6 +17,11 @@ function json(data: unknown, status = 200): Response {
 
 const server = Bun.serve({
   port: PORT,
+  // Bind to loopback by default. This server exists to keep the AI key
+  // server-side; binding to 0.0.0.0 (Bun's default) would turn it into an
+  // unauthenticated, key-spending generation proxy for the whole LAN. Set
+  // GOVEE_HOST=0.0.0.0 explicitly only if you really want network access.
+  hostname: process.env.GOVEE_HOST ?? "127.0.0.1",
   async fetch(req) {
     const url = new URL(req.url);
 
