@@ -25,7 +25,7 @@ It's working well for my setup. I'm still developing it.
 - Pattern generators including rainbows, stripes, checker, and a **two-color gradient**.
 - Configurable segment count, sections, and grid rows/columns; layout calibration in the right inspector (reverse a section, serpentine wiring, transpose / flip-H / flip-V).
 - Image import (samples onto the grid; snaps to the palette when Snap is on).
-- On-device effects via the H703B's native effect engine (Breathe, Twinkle, Gradient, Cycle, Clockwise, Counter-CW) with adjustable speed; these persist and run on the device itself. The canvas shows an approximate on-screen preview for the motion effects.
+- On-device effects via the H703B's native effect engine (Static, Gradient, Breathe, Twinkle, Cycle, Clockwise, Counter-CW) with adjustable speed; these persist and run on the device itself. **Static** holds a painted design dead still (it's the default), and choosing it while an animation is playing freezes the current frame; **Gradient** smoothly flows the dot colors into each other. The canvas shows an approximate on-screen preview for the motion effects.
 - Live animations streamed from the browser frame-by-frame: Rainbow flow, Color cycle, Chase, Sparkle, Breathe design, Wave, and **Scroll →/←/↓/↑** (slides your painted design and wraps). Plus GIF/video playback sampled onto the grid.
 - **AI generation**, static or **animated** (a looping multi-frame animation): describe it in words and Claude/OpenAI returns a color grid or frame sequence (needs an AI key in `.env`, see below). Honors the approved palette when Snap is on.
 - Saved scenes: save, load, delete, and export/import as JSON.
@@ -73,6 +73,19 @@ groups:      for each distinct color, one variable-length run:
 
 split across 20-byte writes (first packet `a3 00`, last `a3 ff`), then a commit packet `33 05 0a 20 03`. The protocol, scene encoder, and image sampler all live in [`web/cloudgrid-core.js`](web/cloudgrid-core.js).
 
+### Bluetooth frame rate (measured)
+
+Live animations stream one scene per frame, so the achievable frame rate is set by how fast a scene writes. Measured on an H703B over Windows BLE (`CG.bleRate()` exposes the live numbers):
+
+- A scene's write time scales with **packet count**, not raw bandwidth: the encoder spends a deliberate ~10ms between packets to keep the controller from mis-assembling the stream, so cost ≈ `packets × ~12ms + commit`. Packet count tracks the number of **distinct colors** in the frame (each color is one variable-length group).
+- An 88-segment **full-color** frame is ~9 packets ≈ **110ms** to write. A few-color frame (a scroll, say) is ~3 packets ≈ **37ms**.
+- Pushing frames back-to-back floods Windows BLE and triggers a disconnect/reconnect storm. Leaving **~180–250ms idle between writes** keeps the link stable. The sustained, stable ceiling is therefore **~3 full-grid frames/sec**; sparse/few-color frames reach ~4–5 fps.
+- So the animation loop is **clocked to the lights**: it pushes a frame, waits for the write to drain plus a stability gap, then advances. Every frame the lights show is consecutive (no skipping), and the on-screen preview steps at that same rate so it matches the lights. The Speed slider trades the idle gap within a safe floor.
+
+The exact ceiling is device-specific, so the Device card has a **Find limit** calibrator: it slides whatever you've painted on the grid (a discrete moving feature, so a dropped frame reads as an obvious jump, unlike a hue-flow where a skip is invisible) and steadily speeds it up. Click **Skipping!** the moment the motion starts jumping (a link drop auto-marks too). It stores the cadence at that point, with a safety margin, as a persistent cap that every animation respects. The preview always steps at the same rate the lights do, so what you judge on the lights is accurate.
+
+Planning consequence: live full-grid motion is inherently low-fps, and it gets worse as the grid grows (more segments and colors → more packets → slower writes). **Fewer distinct colors = fewer packets = faster frames**, so quantization (q=24 on animation frames) and palette-snapping directly raise the frame rate. For fluid motion at the eventual 270-light scale, lean on the device's **on-device effects** or low-color designs rather than streaming full-color frames.
+
 ## Project layout
 
 - `web/`: the frontend. `CloudGrid.dc.html` is the UI (a self-contained design component, no build step; React loads from a CDN at runtime), `cloudgrid-core.js` is the Govee BLE protocol + image sampler, `support.js` is the design-component runtime.
@@ -82,7 +95,7 @@ split across 20-byte writes (first packet `a3 00`, last `a3 ff`), then a commit 
 ## Roadmap
 
 - Map segment index → physical position; full 24×11 multi-device ceiling grid (one controller today).
-- A truly-static effect byte. Packet captures from the official app show every per-dot DIY scene using dir `0x13`, which is a slow *Gradient* flow, not a freeze; no static byte has turned up yet. The encoder forces speed 0 for `0x13` to slow the drift as much as possible.
+- dir `0x13` is the DIY-scene render mode, and speed decides its behavior on-device: speed 0 holds the design dead still (**Static**), speed > 0 smoothly flows the dot colors into each other (**Gradient**). Both are exposed as effects; painted designs and live-animation frames always push at speed 0 so they stay put.
 - Scene playlists / a frame-by-frame animation editor.
 - Broader device support beyond the H703B.
 

@@ -24,6 +24,7 @@
   @keyframes cgpulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 </style>
 <script src="cloudgrid-core.js"></script>
+<script src="captured-scenes.js"></script>
 </helmet>
 
 <div style="height:100vh; display:flex; flex-direction:column; background:#0b0d10; color:#e6e9ef; font-size:13px; overflow:hidden;">
@@ -72,6 +73,8 @@
           <button onClick="{{ mTranspose }}" style="{{ dropItem }}"><span>Transpose</span><span style="{{ tpMark }}">✓</span></button>
           <button onClick="{{ mFlipH }}" style="{{ dropItem }}"><span>Flip horizontal</span><span style="{{ fhMark }}">✓</span></button>
           <button onClick="{{ mFlipV }}" style="{{ dropItem }}"><span>Flip vertical</span><span style="{{ fvMark }}">✓</span></button>
+          <div style="height:1px; background:#262b33; margin:4px 6px;"></div>
+          <button onClick="{{ mDebug }}" style="{{ dropItem }}"><span>Debugging tools</span><span style="{{ dbgMark }}">✓</span></button>
         </div>
       </sc-if>
     </div>
@@ -196,7 +199,7 @@
                 <sc-for list="{{ scenes }}" as="sc" hint-placeholder-count="3">
                   <div style="display:flex; align-items:center; gap:9px; background:#0e1116; border:1px solid #232932; border-radius:7px; padding:7px 9px;">
                     <span style="font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ sc.name }}</span>
-                    <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6c7686;">{{ sc.lit }} lit</span>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#6c7686;">{{ sc.label }}</span>
                     <button onClick="{{ sc.onLoad }}" style="{{ chipBtn }}">Load</button>
                     <button onClick="{{ sc.onDelete }}" style="{{ chipBtnX }}">✕</button>
                   </div>
@@ -247,6 +250,60 @@
           </div>
         </sc-if>
         </div>
+
+        <!-- DEBUGGING (shown via View > Debugging tools) -->
+        <sc-if value="{{ debug }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ secWrap }}">
+          <button onClick="{{ tDebug }}" style="{{ headDebug }}"><span style="{{ chevDebug }}">›</span><span style="flex:1; text-align:left;">Debugging</span></button>
+          <sc-if value="{{ expanded.debug }}" hint-placeholder-val="{{ true }}">
+          <div style="{{ secBody }}">
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Frame rate</div>
+            <div style="{{ sliderRow }}">
+              <span style="{{ sliderLab }}">Rate</span>
+              <input type="range" min="0.5" max="10" step="0.5" value="{{ fps }}" onInput="{{ onFps }}" style="flex:1;" />
+              <span style="{{ sliderVal }}">{{ fps }} fps</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:7px;">
+              <span style="font-size:10.5px; color:#6c7686; flex:1;">{{ fpsHint }}</span>
+              <button onClick="{{ testMotion }}" style="{{ testMotionStyle }}">{{ testMotionLabel }}</button>
+            </div>
+          </div>
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Test patterns</div>
+            <div style="font-size:10.5px; color:#6c7686; line-height:1.4;">Click one to paint + scroll it. Set the rate, then click <b>Mark skip</b> the moment the ceiling stutters.</div>
+            <div style="display:flex; flex-wrap:wrap; gap:7px;">
+              <sc-for list="{{ tests }}" as="t" hint-placeholder-count="10">
+                <button onClick="{{ t.onClick }}" style="{{ t.style }}">{{ t.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button onClick="{{ markSkipHere }}" style="{{ btnPrimaryGhost }}">Mark skip</button>
+              <button onClick="{{ stopAnim }}" style="{{ btnGhost }}">Stop</button>
+            </div>
+          </div>
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">Device scenes (replay)</div>
+            <div style="font-size:10.5px; color:#6c7686; line-height:1.4;">Captured on-device animations from the official app. They play smoothly on the controller itself (no streaming, no fps cap). Click each to see which scene it is.</div>
+            <div style="display:flex; flex-wrap:wrap; gap:7px;">
+              <sc-for list="{{ capturedScenes }}" as="sc" hint-placeholder-count="12">
+                <button onClick="{{ sc.onClick }}" style="{{ sc.style }}">{{ sc.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="{{ cardStyle }}">
+            <div style="{{ cardHead }}">BLE log</div>
+            <div style="font-size:11px; color:#8b94a3; line-height:1.4;">{{ dbgStats }}</div>
+            <div style="display:flex; gap:7px;">
+              <button onClick="{{ clearBleLog }}" style="{{ chipBtn }}">Clear</button>
+              <button onClick="{{ copyBleLog }}" style="{{ chipBtn }}">Copy</button>
+              <button onClick="{{ downloadBleLog }}" style="{{ chipBtn }}">Save</button>
+            </div>
+          </div>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
 
       </div>
     </div>
@@ -491,11 +548,11 @@ class Component extends DCLogic {
       previewColors: null,
       selected: "#ff0000", gradColor: "#0000ff", erasing: false, recent: RECENT_SEED.slice(),
       paletteOn: true, palette: DEFAULT_PALETTE.slice(), palCtx: null, tip: null, paletteModal: false,
-      brushBright: 100, brushSize: 1, brightness: 100, effect: 0x13, speed: 50,
-      animationId: null, scenes: [],
+      brushBright: 100, brushSize: 1, brightness: 100, effectId: "static", speed: 50,
+      animationId: null, scenes: [], fps: 4,
       // ui
-      tool: "brush", dragCells: null, selection: null, openMenu: null, showIndices: false,
-      expanded: { designs: true, effects: false, animate: false },
+      tool: "brush", dragCells: null, selection: null, openMenu: null, showIndices: false, debug: false,
+      expanded: { designs: false, effects: false, animate: false, debug: false },
       ctx: null, viewportW: 760, viewportH: 560, panelW: 344, inspectorW: 308,
       // tool-local
       fit: "contain", rotate: false, imgSat: 100, imgBright: 100, imgContrast: 100,
@@ -511,23 +568,31 @@ class Component extends DCLogic {
     this.undoStack = []; this.redoStack = [];
     this._ctxBrightSnapped = false;
     this._persist = this._persist.bind(this);
+    this._persistSoon = this._persistSoon.bind(this);
 
     // Per-card help text, shown on hover of the card's ⓘ icon (see showTip).
     this.HELP = {
       patterns: "Gradients run from your selected color to the end color above. Stripes and checker use the selected color; rainbows fill the full spectrum.",
       effects: "Effects run on the controller and keep animating after the page closes; they apply motion to your painted design. Gradient (the default) slowly flows, so painted designs drift under it. Speed is in the inspector.",
-      animate: "Streamed from the browser at the inspector Speed; previews live on the grid and push per-light motion to the device. Breathe, Wave and Scroll animate your painted design.",
+      animate: "Streamed from the browser at the Frame rate set in the Device card; previews live on the grid and push per-light motion to the device. Breathe, Wave and Scroll animate your painted design.",
       media: "Load an image, GIF, or video. A still image samples once (use the fit and color sliders); a GIF or video loops live (Chrome/Edge only, capped at 240 frames).",
       ai: "Generates a pattern for the current grid. Needs an AI key in .env (ANTHROPIC_API_KEY or OPENAI_API_KEY); the key never reaches the browser.",
       calibrate: "Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner.",
     };
     // dir bytes confirmed from official-app btsnoop capture (2026-06-23).
-    // 0x13 is Gradient (a slow flow), NOT static — it's what made painted
-    // designs drift. No truly-static dir byte exists in any capture.
+    // dir 0x13 is the DIY-scene render mode; SPEED decides its behavior on the
+    // device. Speed 0 holds the design dead still (Static, the default, and how
+    // every painted design is pushed); speed > 0 makes it smoothly flow the dot
+    // colors into each other (Gradient). Both share dir 0x13, so an effect is
+    // identified by id, and the "hold" flag is what forces speed 0 for Static.
     this.EFFECTS = [
-      { label: "Breathe", dir: 0x14 }, { label: "Twinkle", dir: 0x0f },
-      { label: "Gradient", dir: 0x13 }, { label: "Cycle", dir: 0x02 },
-      { label: "Clockwise", dir: 0x09 }, { label: "Counter-CW", dir: 0x0a },
+      { id: "static", label: "Static", dir: 0x13, hold: true },
+      { id: "gradient", label: "Gradient", dir: 0x13 },
+      { id: "breathe", label: "Breathe", dir: 0x14 },
+      { id: "twinkle", label: "Twinkle", dir: 0x0f },
+      { id: "cycle", label: "Cycle", dir: 0x02 },
+      { id: "cw", label: "Clockwise", dir: 0x09 },
+      { id: "ccw", label: "Counter-CW", dir: 0x0a },
     ];
     const hsl = (h, s, l) => this.hslHex(h, s, l);
     const dim = (hex, t) => this.dim(hex, t);
@@ -556,6 +621,25 @@ class Component extends DCLogic {
       { id: "scrollD", label: "Scroll ↓", fn: (vx, vy, c) => c.designAt(vx, ((vy - c.frame) % c.h + c.h) % c.h) },
       { id: "scrollU", label: "Scroll ↑", fn: (vx, vy, c) => c.designAt(vx, (vy + c.frame) % c.h) },
     ];
+    // Diagnostic test patterns (Debugging panel). Each paints a design of known
+    // complexity; the runner then scrolls it diagonally so frame-skipping on the
+    // lights is visible. They span packet count (distinct colors) and fill level,
+    // so the BLE log shows how the achievable frame rate moves with frame size.
+    // The colors are quantizer-aligned so the color counts stay honest on-wire.
+    const C4 = ["#ff0000", "#00ff00", "#0000ff", "#ffff00"];
+    const C8 = ["#ff0000", "#ff8000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#8000ff", "#ffffff"];
+    this.TESTS = [
+      { id: "solid1", label: "1 color + marker", build: () => this._testGrid((vx) => (vx === 0 ? "#ffffff" : "#ff0000")) },
+      { id: "checker", label: "Checker · 2", build: () => this._testGrid((vx, vy) => ((vx + vy) % 2 ? "#ff0000" : "#0000ff")) },
+      { id: "bands4", label: "Bands · 4", build: () => this._testGrid((vx, _vy, w) => C4[Math.floor(vx / Math.max(1, w / 4)) % 4]) },
+      { id: "bands8", label: "Bands · 8", build: () => this._testGrid((vx, _vy, w) => C8[Math.floor(vx / Math.max(1, w / 8)) % 8]) },
+      { id: "rainbow", label: "Rainbow · full", build: () => this._testGrid((vx, _vy, w) => this.hslHex(w > 1 ? vx / w : 0, 1, 0.5)) },
+      { id: "raingap", label: "Rainbow + gaps", build: () => this._testGrid((vx, _vy, w) => (vx % 4 === 3 ? null : this.hslHex(w > 1 ? vx / w : 0, 1, 0.5))) },
+      { id: "dot", label: "Single dot", build: () => this._testGrid((vx, vy) => (vx === 0 && vy === 0 ? "#ffffff" : null)) },
+      { id: "col", label: "One column", build: () => this._testGrid((vx) => (vx === 0 ? "#ffffff" : null)) },
+      { id: "half", label: "Half filled", build: () => this._testGrid((vx, _vy, w) => (vx < w / 2 ? "#ffffff" : null)) },
+      { id: "dots", label: "Sparse dots", build: () => this._testGrid((vx, vy) => (((vx * 7 + vy * 13) % 9 === 0) ? C4[(vx + vy) % 4] : null)) },
+    ];
   }
 
   // ---------- lifecycle ----------
@@ -565,9 +649,16 @@ class Component extends DCLogic {
       if (raw) {
         const p = JSON.parse(raw);
         const patch = {};
-        ["sections", "rows", "transpose", "flipH", "flipV", "selected", "gradColor", "recent", "paletteOn", "palette", "brightness", "effect", "speed", "scenes"].forEach((k) => {
+        ["sections", "rows", "transpose", "flipH", "flipV", "selected", "gradColor", "recent", "paletteOn", "palette", "brightness", "effectId", "speed", "fps", "scenes"].forEach((k) => {
           if (p[k] != null) patch[k] = p[k];
         });
+        // Migrate an older auto-learned scene-interval cap (ms) to a manual fps.
+        if (patch.fps == null && p.minSceneMs) patch.fps = Math.min(this.MAX_FPS, Math.max(this.MIN_FPS, Math.round((1000 / p.minSceneMs) * 2) / 2));
+        // Migrate an older stored `effect` (raw dir byte) to an effect id, and
+        // keep only a known id, else fall back to Static so a garbage value can't
+        // be pushed as the scene dir.
+        if (patch.effectId == null && p.effect != null) { const m = this.EFFECTS.find((e) => e.dir === p.effect); patch.effectId = m ? m.id : "static"; }
+        if (patch.effectId != null && !this.EFFECTS.some((e) => e.id === patch.effectId)) patch.effectId = "static";
         const t0 = this.totalSegments(patch.sections || this.state.sections);
         patch.colors = new Array(t0).fill(null);
         patch.bright = new Array(t0).fill(100);
@@ -618,9 +709,13 @@ class Component extends DCLogic {
     window.removeEventListener("pointerup", this._up);
     window.removeEventListener("resize", this._measure);
     window.removeEventListener("keydown", this._keydown);
+    if (this._dragMove) window.removeEventListener("pointermove", this._dragMove);
+    if (this._dragUp) window.removeEventListener("pointerup", this._dragUp);
+    document.body.style.userSelect = "";
+    if (this._persistTimer) clearTimeout(this._persistTimer);
     if (this._ro) this._ro.disconnect();
     this.animRunning = false;
-    if (this.fxTimer) clearInterval(this.fxTimer);
+    if (this.fxTimer) clearTimeout(this.fxTimer);
     if (this.device) this.device.disconnect();
   }
   _persist() {
@@ -628,9 +723,15 @@ class Component extends DCLogic {
       const s = this.state;
       localStorage.setItem("cloudgrid", JSON.stringify({
         sections: s.sections, rows: s.rows, transpose: s.transpose, flipH: s.flipH, flipV: s.flipV,
-        selected: s.selected, gradColor: s.gradColor, recent: s.recent, paletteOn: s.paletteOn, palette: s.palette, brightness: s.brightness, effect: s.effect, speed: s.speed, scenes: s.scenes,
+        selected: s.selected, gradColor: s.gradColor, recent: s.recent, paletteOn: s.paletteOn, palette: s.palette, brightness: s.brightness, effectId: s.effectId, speed: s.speed, fps: s.fps, scenes: s.scenes,
       }));
     } catch (e) {}
+  }
+  // Coalesce rapid persists (dragging the color picker fires onInput continuously)
+  // into one write ~250ms after the last change.
+  _persistSoon() {
+    if (this._persistTimer) clearTimeout(this._persistTimer);
+    this._persistTimer = setTimeout(() => { this._persistTimer = null; this._persist(); }, 250);
   }
 
   // ---------- layout / color / palette math ----------
@@ -649,6 +750,7 @@ class Component extends DCLogic {
   dim(hex, t) { return window.CG.dim(hex, t); }
   dimHex(hex, t) { return window.CG.dim(hex, t); }
   lerpHex(a, b, t) { return window.CG.lerpHex(a, b, t); }
+  hueRotate(hex, delta) { return window.CG.hueRotate(hex, delta); }
   nearestPalette(hex) { return window.CG.nearestPalette(hex, this.state.palette); }
   snapColors(colors) { return window.CG.snapColors(colors, this.state.paletteOn ? this.state.palette : null); }
   addPaletteColor(c) {
@@ -699,23 +801,56 @@ class Component extends DCLogic {
     this.sceneChain = run.catch(() => {});
     return run;
   }
-  buildEntries(colors, bright) {
+  // Build the wire scene from the design and choose the most efficient encoding.
+  // Every physical segment gets a color (off = the bg sentinel); the MOST COMMON
+  // color is then chosen as the scene background. The device paints every
+  // UNLISTED segment with bg, so those segments cost zero bytes — we list only
+  // the rest. That makes the packet count the true minimum: on-wire segments =
+  // total - (most common color's count). For a design on a solid backdrop (or a
+  // dominant color) this is a large saving; it is never worse than listing all,
+  // because "off" is always one of the candidates. `quant` (animation only)
+  // rounds colors first so near-identical shades collapse into one group.
+  // Returns { entries, bg } for setScene.
+  buildEntries(colors, bright, quant) {
     const scale = this.state.brightness / 100;
-    const entries = [];
+    const total = this.totalSegments(this.state.sections);
+    const OFF = [1, 1, 1];
+    const phys = new Array(total).fill(null);
     colors.forEach((c, p) => {
-      if (c) {
-        const [r, g, b] = this.hexToRgb(c);
-        const cb = bright && bright[p] != null ? bright[p] / 100 : 1;
-        const s = scale * cb;
-        entries.push({ seg: this.logicalToPhysical(p, this.state.sections, this.state.rows), r: Math.round(r * s), g: Math.round(g * s), b: Math.round(b * s) });
-      }
+      if (!c) return;
+      const [r0, g0, b0] = this.hexToRgb(c);
+      const cb = bright && bright[p] != null ? bright[p] / 100 : 1;
+      const s = scale * cb;
+      let r = Math.round(r0 * s), g = Math.round(g0 * s), b = Math.round(b0 * s);
+      if (quant) { r = Math.min(255, Math.round(r / quant) * quant); g = Math.min(255, Math.round(g / quant) * quant); b = Math.min(255, Math.round(b / quant) * quant); }
+      phys[this.logicalToPhysical(p, this.state.sections, this.state.rows)] = [r, g, b];
     });
-    return entries;
+    const key = (rgb) => (rgb ? rgb[0] + "," + rgb[1] + "," + rgb[2] : "off");
+    const count = new Map();
+    for (let sgt = 0; sgt < total; sgt++) { const k = key(phys[sgt]); count.set(k, (count.get(k) || 0) + 1); }
+    let bgKey = "off", bgN = -1;
+    for (const [k, n] of count) { if (n > bgN) { bgN = n; bgKey = k; } }
+    const bg = bgKey === "off" ? OFF : bgKey.split(",").map(Number);
+    const entries = [];
+    for (let sgt = 0; sgt < total; sgt++) {
+      if (key(phys[sgt]) === bgKey) continue; // covered by the background, sent for free
+      const rgb = phys[sgt] || OFF;
+      entries.push({ seg: sgt, r: rgb[0], g: rgb[1], b: rgb[2] });
+    }
+    return { entries, bg };
   }
+  // The currently-selected on-device effect entry (dir + hold). Static/Gradient
+  // share dir 0x13, so we resolve by id, not dir.
+  effectEntry() { return this.EFFECTS.find((e) => e.id === this.state.effectId) || this.EFFECTS[0]; }
   async sendFrame(logicalColors) {
     if (!this.device || !this.device.connected) return;
-    const entries = this.buildEntries(logicalColors);
-    await this.queueScene(() => this.device.setScene(entries, { dir: 0x13, speed: this.state.speed }));
+    // Quantize (animation only, q=24) so smooth gradients collapse into far fewer
+    // colors/packets, and let buildEntries pick the background so the dominant
+    // color costs zero bytes. Together these keep per-frame traffic minimal.
+    const { entries, bg } = this.buildEntries(logicalColors, null, 24);
+    // Each live-animation frame is its own static scene; the browser swaps them
+    // to make the motion, so the device must HOLD each frame (speed 0).
+    await this.queueScene(() => this.device.setScene(entries, { dir: 0x13, speed: 0, bg }));
   }
   async push() {
     if (this.animRunning) { this.animRunning = false; this.playbackFrames = null; this.setState({ animationId: null, previewColors: null }); }
@@ -725,9 +860,10 @@ class Component extends DCLogic {
     try {
       do {
         this.pendingPush = false;
-        const entries = this.buildEntries(this.state.colors, this.state.bright);
-        await this.queueScene(() => this.device.setScene(entries, { dir: this.state.effect, speed: this.state.speed }));
-        this.setState({ status: "Pushed " + entries.length + " lit segment(s)" });
+        const { entries, bg } = this.buildEntries(this.state.colors, this.state.bright);
+        const eff = this.effectEntry();
+        await this.queueScene(() => this.device.setScene(entries, { dir: eff.dir, speed: eff.hold ? 0 : this.state.speed, bg }));
+        this.setState({ status: "Pushed design (" + entries.length + " segs on wire)" });
       } while (this.pendingPush);
     } catch (e) {
       this.setState({ status: "Push failed: " + e.message });
@@ -738,10 +874,23 @@ class Component extends DCLogic {
 
   wireDevice(dev) {
     dev.onDisconnect = (intentional) => this.setState({ connected: false, status: intentional ? "Disconnected" : "Reconnecting…" });
-    dev.onReconnect = () => { this.setState({ connected: true, status: "Connected: " + dev.name }); this.push(); };
+    dev.onReconnect = () => {
+      this.setState({ connected: true, status: "Connected: " + dev.name });
+      // Don't clobber a running live animation with a stale static push; the
+      // frame loop skips sending while disconnected and resumes on its own once
+      // the link is back. Only re-push the static design if nothing's animating.
+      if (!this.animRunning) this.push();
+    };
   }
   async tryAutoConnect() {
-    const dev = new window.CG.GoveeDevice();
+    const GD = window.CG.GoveeDevice;
+    // This browser can't reconnect without the chooser (e.g. Brave). Don't fail
+    // silently if we had a device — hint that a manual Connect is needed.
+    if (!GD.autoReconnectSupported()) {
+      if (GD.hasKnownDevice()) this.setState({ status: "Click Connect to reconnect (this browser can't auto-reconnect)" });
+      return;
+    }
+    const dev = new GD();
     this.wireDevice(dev);
     try {
       if (await dev.connectKnown()) {
@@ -766,11 +915,35 @@ class Component extends DCLogic {
   }
   disconnect() { if (this.device) this.device.disconnect(); this.setState({ connected: false, status: "Disconnected" }); }
   connectToggle() { if (this.state.connected) this.disconnect(); else this.connect(); }
+  // BLE diagnostics: copy/clear/download the timestamped event log (scene pushes,
+  // disconnects, reconnects, write errors) so connection problems are inspectable.
+  copyBleLog() {
+    const text = (window.CG && window.CG.bleLog) ? window.CG.bleLog() : "(no BLE log)";
+    const n = text.split("\n").length;
+    const fail = () => { try { console.log(text); } catch (e) {} this.setState({ status: "Copy blocked; BLE log dumped to console (F12)" }); };
+    try { navigator.clipboard.writeText(text).then(() => this.setState({ status: "BLE log copied (" + n + " lines)" }), fail); } catch (e) { fail(); }
+  }
+  downloadBleLog() {
+    const text = (window.CG && window.CG.bleLog) ? window.CG.bleLog() : "";
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+    const a = document.createElement("a"); a.href = url; a.download = "cloudgrid-ble-log.txt"; a.click(); URL.revokeObjectURL(url);
+  }
+  clearBleLog() { if (window.CG && window.CG.bleLogClear) window.CG.bleLogClear(); this.setState({ status: "BLE log cleared" }); }
   async powerToggle() {
     if (!this.device || !this.device.connected) return;
     const next = !this.state.powered;
+    // A live animation streams a fresh scene every frame, so powering off is
+    // futile while one runs: the next frame immediately re-lights the strip.
+    // Stop the stream (and cancel any queued frame) before sending power off.
+    if (!next && this.animRunning) {
+      this.animRunning = false; this.playbackFrames = null; this.sceneGen++;
+      this.setState({ animationId: null, previewColors: null });
+    }
     this.setState({ powered: next });
-    try { if (next) await this.device.powerOn(); else await this.device.powerOff(); } catch (e) {}
+    // Revert the optimistic toggle if the BLE write fails, so the UI never claims
+    // a power state the device isn't actually in.
+    try { if (next) await this.device.powerOn(); else await this.device.powerOff(); }
+    catch (e) { this.setState({ powered: !next, status: "Power toggle failed: " + e.message }); }
   }
 
   // ---------- mutations ----------
@@ -780,7 +953,7 @@ class Component extends DCLogic {
   // to the canvas (painting), NOT when it's merely selected — so dragging the
   // color picker across hues doesn't flood the recents.
   useColor(c) { if (c && this.state.recent[0] !== c) this.setState({ recent: this.addRecent(c) }, this._persist); }
-  setSelected(c) { this.setState({ selected: c, erasing: false }, this._persist); }
+  setSelected(c) { this.setState({ selected: c, erasing: false }, this._persistSoon); }
   setErasing(v) { this.selectTool(v ? "eraser" : "brush"); }
   // tool = brush | eraser | bucket | line | rect | eyedropper | select.
   // erasing stays in sync so existing swatch/eraser-button styling keeps working.
@@ -797,7 +970,7 @@ class Component extends DCLogic {
     this.setState({ sections, colors, bright }, () => { this._persist(); this.push(); });
   }
   setRows(n) { this.setState({ rows: Math.max(1, Math.min(45, n || 1)) }, () => { this._persist(); this.push(); }); }
-  setBrightness(n) { this.setState({ brightness: Math.max(0, Math.min(100, Math.round(n))) }, () => { this._persist(); this.push(); }); }
+  setBrightness(n) { this.setState({ brightness: Math.max(0, Math.min(100, Math.round(n))) }, () => { this._persist(); if (!this.animRunning) this.push(); }); }
   setBrushBright(n) { this.setState({ brushBright: Math.max(0, Math.min(100, Math.round(n))) }); }
   setCellBright(logical, v) { const bright = this.state.bright.slice(); bright[logical] = Math.max(0, Math.min(100, v)); this.setState({ bright }); }
   snapshot() {
@@ -817,14 +990,30 @@ class Component extends DCLogic {
     const s = this.redoStack.pop();
     this.setState({ colors: s.colors.slice(), bright: s.bright.slice() }, () => this.push());
   }
-  setEffect(n) { this.setState({ effect: n }, () => { this._persist(); this.push(); this.startEffectPreview(); }); }
-  setSpeed(n) { this.setState({ speed: Math.max(1, Math.min(100, Math.round(n))) }, () => { this._persist(); this.push(); }); }
+  setEffect(id) {
+    const eff = this.EFFECTS.find((e) => e.id === id) || this.EFFECTS[0];
+    // Choosing a hold effect (Static) while an animation is flashing should
+    // FREEZE what's on screen rather than revert to the pre-animation design:
+    // bake the current frame in, then push() stops the loop and holds it static.
+    if (eff.hold && this.animRunning && this.state.previewColors) {
+      const total = this.totalSegments(this.state.sections);
+      const frozen = Array.from({ length: total }, (_, k) => this.state.previewColors[k] || null);
+      this.setState({ colors: frozen, bright: new Array(total).fill(100), effectId: id }, () => { this._persist(); this.push(); this.startEffectPreview(); });
+      return;
+    }
+    this.setState({ effectId: id }, () => { this._persist(); this.push(); this.startEffectPreview(); });
+  }
+  setSpeed(n) { this.setState({ speed: Math.max(1, Math.min(100, Math.round(n))) }, () => { this._persist(); if (!this.animRunning) this.push(); }); }
   // Orientation toggles re-map the editor view; push too so the device stays in
   // sync with what's on screen (matches reverse/snake/run-length behavior).
   toggleTranspose() { this.setState({ transpose: !this.state.transpose }, () => { this._persist(); this.push(); }); }
   toggleFlipH() { this.setState({ flipH: !this.state.flipH }, () => { this._persist(); this.push(); }); }
   toggleFlipV() { this.setState({ flipV: !this.state.flipV }, () => { this._persist(); this.push(); }); }
 
+  // H703B hardware limits: 45 LEDs per strand, 2 strands per controller = 90
+  // segments max. One CloudGrid instance drives one controller; 3 controllers =
+  // 270 LEDs total, but never more than 90 on any one. Other light models will
+  // need their own caps when their BLE protocol is added.
   addSection() { if (this.state.sections.length >= 2) return; this.setSections(this.state.sections.concat([{ length: 44, reversed: false, serpentine: false }])); }
   removeSection(i) { if (this.state.sections.length <= 1) return; this.setSections(this.state.sections.filter((_, idx) => idx !== i)); }
   setSectionLength(i, len) { const c = Math.max(1, Math.min(45, len || 1)); this.setSections(this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { length: c }) : s)); }
@@ -920,7 +1109,7 @@ class Component extends DCLogic {
   clear() {
     this.snapshot();
     const total = this.totalSegments(this.state.sections);
-    this.setState({ colors: new Array(total).fill(null), bright: new Array(total).fill(100), effect: 0x13 });
+    this.setState({ colors: new Array(total).fill(null), bright: new Array(total).fill(100), effectId: "static" });
     if (this.animRunning) { this.animRunning = false; this.setState({ animationId: null, previewColors: null }); }
     this.stopEffectPreview();
     this.sceneGen++;
@@ -942,8 +1131,25 @@ class Component extends DCLogic {
     this.applyDesign(colors);
   }
 
+  // The frame-rate test probe (animId "__calib__"). It slides the CURRENT grid design
+  // diagonally and wraps, so any non-uniform painting visibly moves and a dropped
+  // frame reads as an obvious jump (unlike Rainbow's in-place hue flow, where a
+  // skip is invisible). If the grid is empty, it sweeps a 2-wide bright bar so
+  // there's always a feature to track.
+  _calibAnim() {
+    const hasDesign = this.state.colors.some(Boolean);
+    return { fn: (vx, vy, c) => {
+      if (hasDesign) {
+        const sx = ((vx - c.frame) % c.w + c.w) % c.w;
+        const sy = ((vy - c.frame) % c.h + c.h) % c.h;
+        return c.designAt(sx, sy);
+      }
+      const pos = ((vx - c.frame) % c.w + c.w) % c.w;
+      return pos < 2 ? "#ffffff" : null;
+    } };
+  }
   computeAnimColors(animId, frame) {
-    const anim = this.ANIMATIONS.find((a) => a.id === animId);
+    const anim = animId === "__calib__" ? this._calibAnim() : this.ANIMATIONS.find((a) => a.id === animId);
     if (!anim) return null;
     const { sections, rows, transpose, flipH, flipV, selected, colors } = this.state;
     const total = this.totalSegments(sections);
@@ -960,6 +1166,18 @@ class Component extends DCLogic {
     }
     return out;
   }
+  // The animation is clocked to the lights: the device gets every consecutive
+  // frame (no skipping) and the on-screen preview steps at the same rate, so the
+  // preview is honest about the lights. The pace is set MANUALLY as a frame rate
+  // (scene pushes per second); the loop derives the post-write idle from it minus
+  // the measured write time, so heavy and light frames hold the same rate. The
+  // device can't beat its write-bound ceiling (~3 fps full-grid — see
+  // web/cloudgrid-core.js bleRate() and the README), so a setting higher than the
+  // writes allow just runs at whatever the writes allow.
+  HARD_MIN_GAP_MS = 60; // never leave less idle than this after a write
+  MIN_FPS = 0.5; MAX_FPS = 10;
+  fpsValue() { return Math.min(this.MAX_FPS, Math.max(this.MIN_FPS, this.state.fps || 4)); }
+  sceneIntervalMs() { return Math.round(1000 / this.fpsValue()); }
   async runFrameLoop() {
     while (this.animRunning) {
       const logical = this.playbackFrames
@@ -967,16 +1185,85 @@ class Component extends DCLogic {
         : (this.state.animationId ? this.computeAnimColors(this.state.animationId, this.animFrame) : null);
       if (!logical) break;
       this.setState({ previewColors: logical });
-      if (this.device && this.device.connected) { try { await this.sendFrame(logical); } catch (e) {} }
+      if (this.device && this.device.connected) {
+        // Push this frame and WAIT for the write to drain before advancing, so no
+        // two writes overlap (overlap is what floods the link) and every frame is
+        // shown in order. Idle after the write = target interval minus how long
+        // the write actually took.
+        this._frameInFlight = true;
+        const t0 = Date.now();
+        await this.sendFrame(logical).catch(() => {});
+        this._frameInFlight = false;
+        const writeMs = Date.now() - t0;
+        const gap = Math.max(this.HARD_MIN_GAP_MS, this.sceneIntervalMs() - writeMs);
+        await new Promise((r) => setTimeout(r, gap));
+      } else {
+        // Disconnected: preview-only, paced to the same target fps.
+        await new Promise((r) => setTimeout(r, this.sceneIntervalMs()));
+      }
       this.animFrame++;
-      const interval = 400 - ((this.state.speed - 1) / 99) * 350;
-      await new Promise((r) => setTimeout(r, Math.max(30, interval)));
     }
     this.animRunning = false;
+  }
+  // ---- frame rate (manual) -------------------------------------------------
+  setFps(n) {
+    const v = Math.min(this.MAX_FPS, Math.max(this.MIN_FPS, Math.round(n * 2) / 2));
+    this.setState({ fps: v }, this._persist);
+  }
+  // Optional visible test: slide the current grid design (the "__calib__" probe)
+  // diagonally so a dropped frame reads as an obvious jump while you dial in the
+  // frame rate. Click again to stop and return to the static design.
+  toggleTestMotion() {
+    if (this.animRunning && this.state.animationId === "__calib__") { this.stopAnimation(); return; }
+    if (!this.device || !this.device.connected) { this.setState({ status: "Connect a device to test the frame rate" }); return; }
+    this.startAnimation("__calib__");
+  }
+  // Build a logical color array from a visual-coords fn (for the test patterns).
+  _testGrid(fn) {
+    const { sections, rows, transpose, flipH, flipV } = this.state;
+    const total = this.totalSegments(sections);
+    const width = this.gridWidth(total, rows);
+    const d = this.gridDims(width, rows, transpose);
+    const out = new Array(total).fill(null);
+    for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
+      const logical = this.visualToLogical(vx, vy, width, rows, { transpose, flipH, flipV });
+      if (logical >= total) continue;
+      out[logical] = fn(vx, vy, d.w, d.h) || null;
+    }
+    return out;
+  }
+  // Paint a diagnostic pattern and scroll it at the current frame rate. The BLE
+  // log gets a "test" marker so each run is identifiable when you send it over.
+  runTest(id) {
+    const def = this.TESTS.find((t) => t.id === id);
+    if (!def) return;
+    if (!this.device || !this.device.connected) { this.setState({ status: "Connect a device to run a test pattern" }); return; }
+    const total = this.totalSegments(this.state.sections);
+    if (window.CG) window.CG.bleLogEvent("test", { name: def.id, fps: this.state.fps });
+    this.setState({ colors: def.build(), bright: new Array(total).fill(100), status: "Testing: " + def.label + " @ " + this.state.fps + " fps" }, () => this.startAnimation("__calib__"));
+  }
+  // Stamp the current rate + last write stats into the log at the moment the
+  // lights visibly start skipping, so the threshold is captured without notes.
+  markSkipHere() {
+    const r = (window.CG && window.CG.bleRate) ? window.CG.bleRate() : {};
+    if (window.CG) window.CG.bleLogEvent("skip-mark", { fps: this.state.fps, pkts: r.lastPkts, ms: r.lastWriteMs });
+    this.setState({ status: "Marked skip at " + this.state.fps + " fps" });
+  }
+  // Replay a captured on-device-animation scene (window.CG_SCENES). The
+  // controller animates it itself, so it is smooth and persistent — no frame
+  // streaming, no ~5fps cap. Stops any live animation first.
+  async playCapturedScene(scene) {
+    if (!this.device || !this.device.connected) { this.setState({ status: "Connect a device to play a scene" }); return; }
+    if (this.animRunning) { this.animRunning = false; this.playbackFrames = null; this.setState({ animationId: null, previewColors: null }); }
+    if (window.CG) window.CG.bleLogEvent("replay", { id: scene.id, fmt: scene.fmt, type: scene.type });
+    this.setState({ status: "Playing scene " + scene.label });
+    try { await this.queueScene(() => this.device.replayScene(scene.pkts)); }
+    catch (e) { this.setState({ status: "Scene failed: " + e.message }); }
   }
   startAnimation(id) {
     this.stopEffectPreview();
     this.playbackFrames = null;
+    if (window.CG) window.CG.bleLogEvent("anim-start", { id });
     this.setState({ animationId: id });
     this.animFrame = 0;
     if (!this.animRunning) { this.animRunning = true; this.runFrameLoop(); }
@@ -984,41 +1271,95 @@ class Component extends DCLogic {
   playFrames(frames) {
     if (!frames.length) return;
     this.stopEffectPreview();
+    if (window.CG) window.CG.bleLogEvent("anim-frames", { n: frames.length });
     this.playbackFrames = frames;
-    this.setState({ animationId: "__frames__" });
+    // Commit frame 0 as the static design so the design source-of-truth isn't a
+    // stale older one: stopping, a reconnect, or a static push then shows this
+    // animation's frame, not whatever was painted before it.
+    const total = this.totalSegments(this.state.sections);
+    const colors = Array.from({ length: total }, (_, k) => (frames[0][k] != null ? frames[0][k] : null));
+    this.setState({ animationId: "__frames__", colors, bright: new Array(total).fill(100) });
     this.animFrame = 0;
     if (!this.animRunning) { this.animRunning = true; this.runFrameLoop(); }
   }
   stopAnimation() {
+    if (window.CG) window.CG.bleLogEvent("anim-stop");
     this.animRunning = false; this.playbackFrames = null;
     this.setState({ animationId: null, previewColors: null }, () => { this.push(); this.startEffectPreview(); });
   }
-  // On-canvas approximation of an on-device motion effect (cosmetic only — the
-  // real effect runs on the controller). Breathe pulses, Flash blinks, the
-  // rotation effects sweep brightness across columns. Static = no preview.
+  // On-canvas approximation of an on-device motion effect (cosmetic only; the
+  // real effect runs on the controller). Breathe pulses, Flash blinks, and the
+  // Clockwise/Counter-CW effects shift the whole design one segment along the
+  // strand per frame (each lit dot walks to the next index and wraps) without
+  // changing brightness. Static = no preview. The tick re-reads the Speed slider
+  // each frame (like live animations) so the preview re-paces live.
   startEffectPreview() {
     this.stopEffectPreview();
-    const kind = { 20: "breathe", 15: "flash", 9: "spin", 10: "spin" }[this.state.effect];
+    const id = this.state.effectId;
+    const kind = { breathe: "breathe", twinkle: "flash", cw: "spin", ccw: "spin", gradient: "gradient" }[id];
     if (!kind || this.animRunning) return;
+    const spinDir = id === "ccw" ? -1 : 1; // Clockwise advances index +1/frame; Counter-CW backwards.
     this.fxFrame = 0;
-    this.fxTimer = setInterval(() => {
+    const tick = () => {
       const colors = this.state.colors;
-      if (!colors.some(Boolean)) { return; }
-      const f = this.fxFrame++;
-      let preview;
-      if (kind === "breathe") { const t = (Math.sin(f * 0.25) + 1) / 2; preview = colors.map((c) => (c ? this.dim(c, 0.12 + 0.88 * t) : null)); }
-      else if (kind === "flash") { const on = f % 2 === 0; preview = colors.map((c) => (c ? (on ? c : this.dim(c, 0.05)) : null)); }
-      else { const rows = this.state.rows; preview = colors.map((c, p) => { if (!c) return null; const col = Math.floor(p / Math.max(1, rows)); const t = (Math.sin(col * 0.6 - f * 0.35) + 1) / 2; return this.dim(c, 0.25 + 0.75 * t); }); }
-      this.setState({ previewColors: preview });
-    }, 110);
+      if (colors.some(Boolean)) {
+        const f = this.fxFrame++;
+        let preview;
+        if (kind === "breathe") { const t = (Math.sin(f * 0.25) + 1) / 2; preview = colors.map((c) => (c ? this.dim(c, 0.12 + 0.88 * t) : null)); }
+        else if (kind === "flash") { const on = f % 2 === 0; preview = colors.map((c) => (c ? (on ? c : this.dim(c, 0.05)) : null)); }
+        else if (kind === "spin") { const total = colors.length; const shift = ((spinDir * f) % total + total) % total; preview = colors.map((_, i) => colors[(i - shift + total) % total]); }
+        else { const dh = (f * 0.02) % 1; preview = colors.map((c) => (c ? this.hueRotate(c, dh) : null)); }
+        this.setState({ previewColors: preview });
+      }
+      // Match the live-animation pacing so the slider visibly changes the preview.
+      const interval = Math.max(40, 400 - ((this.state.speed - 1) / 99) * 350);
+      this.fxTimer = setTimeout(tick, interval);
+    };
+    this.fxTimer = setTimeout(tick, 0);
   }
   stopEffectPreview() {
-    if (this.fxTimer) { clearInterval(this.fxTimer); this.fxTimer = null; if (!this.animRunning) this.setState({ previewColors: null }); }
+    if (this.fxTimer) { clearTimeout(this.fxTimer); this.fxTimer = null; if (!this.animRunning) this.setState({ previewColors: null }); }
   }
 
   // ---------- scenes ----------
-  saveScene() { const n = this.state.sceneName.trim(); if (!n) return; const scene = { name: n, colors: this.state.colors.slice(), bright: this.state.bright.slice() }; this.setState({ scenes: this.state.scenes.filter((s) => s.name !== n).concat([scene]), sceneName: "" }, this._persist); }
-  loadScene(i) { const sc = this.state.scenes[i]; if (!sc) return; this.snapshot(); const total = this.totalSegments(this.state.sections); const colors = Array.from({ length: total }, (_, k) => sc.colors[k] != null ? sc.colors[k] : null); const bright = Array.from({ length: total }, (_, k) => (sc.bright && sc.bright[k] != null) ? sc.bright[k] : 100); this.setState({ colors, bright }, () => this.push()); }
+  // Keep only well-formed cell colors (#rrggbb or null); a corrupt scene/import
+  // would otherwise reach hexToRgb -> NaN -> a silent all-black push.
+  _cleanColors(arr, total) {
+    return Array.from({ length: total }, (_, k) => {
+      const c = arr && arr[k];
+      return typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c) ? c.toLowerCase() : null;
+    });
+  }
+  _cleanBright(arr, total) { return Array.from({ length: total }, (_, k) => { const b = arr && arr[k]; return typeof b === "number" ? Math.max(0, Math.min(100, b)) : 100; }); }
+  // A scene captures whatever is on the grid right now, which may be animated:
+  //   { colors, bright }            static design
+  //   { colors, bright, effectId }  a live procedural effect over a design
+  //   { frames }                    a baked frame animation (AI frames / GIF / video)
+  saveScene() {
+    const n = this.state.sceneName.trim(); if (!n) return;
+    let scene;
+    if (this.playbackFrames && this.playbackFrames.length) {
+      scene = { name: n, frames: this.playbackFrames.map((f) => f.slice()) };
+    } else if (this.state.animationId && this.state.animationId !== "__frames__") {
+      scene = { name: n, colors: this.state.colors.slice(), bright: this.state.bright.slice(), effectId: this.state.animationId };
+    } else {
+      scene = { name: n, colors: this.state.colors.slice(), bright: this.state.bright.slice() };
+    }
+    this.setState({ scenes: this.state.scenes.filter((s) => s.name !== n).concat([scene]), sceneName: "" }, this._persist);
+  }
+  loadScene(i) {
+    const sc = this.state.scenes[i]; if (!sc) return;
+    this.snapshot();
+    const total = this.totalSegments(this.state.sections);
+    if (Array.isArray(sc.frames) && sc.frames.length) {
+      this.playFrames(sc.frames.map((f) => this._cleanColors(f, total)));
+      return;
+    }
+    const colors = this._cleanColors(sc.colors, total);
+    const bright = this._cleanBright(sc.bright, total);
+    if (sc.effectId) this.setState({ colors, bright }, () => { this.push(); this.startAnimation(sc.effectId); });
+    else this.setState({ colors, bright }, () => this.push());
+  }
   deleteScene(i) { this.setState({ scenes: this.state.scenes.filter((_, idx) => idx !== i) }, this._persist); }
   exportScenes() {
     const data = JSON.stringify({ app: "cloudgrid", scenes: this.state.scenes }, null, 2);
@@ -1031,7 +1372,19 @@ class Component extends DCLogic {
       const incoming = Array.isArray(parsed) ? parsed : parsed.scenes;
       if (!Array.isArray(incoming)) return;
       const byName = new Map(this.state.scenes.map((s) => [s.name, s]));
-      for (const s of incoming) if (s && s.name && Array.isArray(s.colors)) byName.set(s.name, s);
+      for (const s of incoming) {
+        if (!s || !s.name) continue;
+        if (Array.isArray(s.frames) && s.frames.length) {
+          byName.set(s.name, { name: s.name, frames: s.frames.map((f) => (Array.isArray(f) ? this._cleanColors(f, f.length) : [])) });
+          continue;
+        }
+        if (!Array.isArray(s.colors)) continue;
+        const colors = this._cleanColors(s.colors, s.colors.length);
+        const bright = Array.isArray(s.bright) ? s.bright.map((b) => (typeof b === "number" ? Math.max(0, Math.min(100, b)) : 100)) : undefined;
+        const scene = { name: s.name, colors, bright };
+        if (typeof s.effectId === "string") scene.effectId = s.effectId;
+        byName.set(s.name, scene);
+      }
       this.setState({ scenes: Array.from(byName.values()) }, this._persist);
     } catch (e) { this.setState({ status: "Import failed: invalid file" }); }
   }
@@ -1059,6 +1412,7 @@ class Component extends DCLogic {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     const url = URL.createObjectURL(f); const img = new Image();
     img.onload = () => { this.imgEl = img; this.imgW = img.naturalWidth; this.imgH = img.naturalHeight; this.resampleImage(); URL.revokeObjectURL(url); };
+    img.onerror = () => { URL.revokeObjectURL(url); this.setState({ mediaStatus: "Couldn't load that image." }); };
     img.src = url; e.target.value = "";
   }
   async framesFromImage(file, opts) {
@@ -1077,17 +1431,21 @@ class Component extends DCLogic {
   }
   async framesFromVideo(file, opts) {
     const url = URL.createObjectURL(file);
+    const video = document.createElement("video"); video.src = url; video.muted = true;
     try {
-      const video = document.createElement("video"); video.src = url; video.muted = true;
       await new Promise((res, rej) => { video.onloadedmetadata = () => res(); video.onerror = () => rej(new Error("could not load video")); });
       const step = 1 / 6; const frames = [];
       for (let t = 0; t < video.duration && frames.length < 240; t += step) {
+        // Attach the listener before seeking, and bound the wait: a seek to a time
+        // the video is already at fires no "seeked" event, which would otherwise
+        // hang decoding forever. On timeout we just sample the current frame.
+        const seeked = new Promise((res) => { video.addEventListener("seeked", () => res(), { once: true }); });
         video.currentTime = t;
-        await new Promise((res) => { video.onseeked = () => res(); });
+        await Promise.race([seeked, new Promise((res) => setTimeout(res, 500))]);
         frames.push(window.CG.sampleSource(video, video.videoWidth, video.videoHeight, opts));
       }
       return frames;
-    } finally { URL.revokeObjectURL(url); }
+    } finally { try { video.pause(); } catch (e) {} video.removeAttribute("src"); URL.revokeObjectURL(url); }
   }
   async onChooseMedia(e) {
     const file = e.target.files && e.target.files[0]; e.target.value = ""; if (!file || !window.CG) return;
@@ -1162,15 +1520,18 @@ class Component extends DCLogic {
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      this._dragMove = this._dragUp = null;
       document.body.style.userSelect = "";
       this._measure && this._measure();
     };
+    this._dragMove = move; this._dragUp = up;
     document.body.style.userSelect = "none";
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   }
   toggleSection(k) { this.setState({ expanded: Object.assign({}, this.state.expanded, { [k]: !this.state.expanded[k] }) }); }
   toggleIndices() { this.setState({ showIndices: !this.state.showIndices, openMenu: null }); }
+  toggleDebug() { this.setState({ debug: !this.state.debug, openMenu: null }, this._persist); }
   openCtx(e, logical) { e.preventDefault(); this._ctxBrightSnapped = false; this.setState({ ctx: { x: e.clientX, y: e.clientY, logical }, palCtx: null, openMenu: null }); }
   closeCtx() { this.setState({ ctx: null }); }
   // Per-cell brightness from the context-menu slider: one undo step per editing
@@ -1248,6 +1609,7 @@ class Component extends DCLogic {
     const headDesigns = secHead(exp.designs), chevDesigns = secChev(exp.designs), tDesigns = () => this.toggleSection("designs");
     const headEffects = secHead(exp.effects), chevEffects = secChev(exp.effects), tEffects = () => this.toggleSection("effects");
     const headAnimate = secHead(exp.animate), chevAnimate = secChev(exp.animate), tAnimate = () => this.toggleSection("animate");
+    const headDebug = secHead(exp.debug), chevDebug = secChev(exp.debug), tDebug = () => this.toggleSection("debug");
 
     // ---- recent-color swatches ----
     const swatches = st.recent.map((c) => ({
@@ -1287,7 +1649,7 @@ class Component extends DCLogic {
       if (exists && dragSet && dragSet.has(logical)) style = Object.assign({}, style, { background: dragGhost, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)" });
       else if (exists && selSet && selSet.has(logical)) style = Object.assign({}, style, { boxShadow: "inset 0 0 0 2px rgba(52,207,107,0.85)" });
       cells.push({
-        key: k, idx: logical, showIdx: exists && st.showIndices, style,
+        idx: logical, showIdx: exists && st.showIndices, style,
         onDown: exists ? ((e) => {
           if (e.button === 2) return; e.preventDefault();
           const tool = this.state.tool;
@@ -1310,7 +1672,8 @@ class Component extends DCLogic {
     const dropStyle = { position: "absolute", top: "calc(100% + 6px)", left: 0, minWidth: "212px", background: "#14181e", border: "1px solid #2a313b", borderRadius: "9px", padding: "5px", boxShadow: "0 16px 44px rgba(0,0,0,0.55)", zIndex: 60, display: "flex", flexDirection: "column", gap: "1px" };
     const dropItem = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", font: "inherit", fontSize: "12.5px", fontWeight: 500, padding: "7px 9px", borderRadius: "6px", cursor: "pointer", background: "transparent", color: "#cfd6e0", border: "none", textAlign: "left", width: "100%", whiteSpace: "nowrap" };
 
-    const effectName = (this.EFFECTS.find((e) => e.dir === st.effect) || { label: "Custom" }).label;
+    const effEntry = this.EFFECTS.find((e) => e.id === st.effectId) || { label: "Custom", dir: 0x13 };
+    const effectName = effEntry.label;
     const statusDot = { width: "9px", height: "9px", borderRadius: "50%", flex: "none", background: st.connected ? "#34cf6b" : "#5d6675", boxShadow: st.connected ? "0 0 7px #34cf6b" : "none" };
 
     const sliderRow = { display: "flex", alignItems: "center", gap: "10px" };
@@ -1343,6 +1706,12 @@ class Component extends DCLogic {
       powerBtn: Object.assign({}, this._btn(st.connected && st.powered), { opacity: st.connected ? 1 : 0.45 }),
       pushBtn: Object.assign({}, btnPrimary, { textAlign: "center", opacity: st.connected ? 1 : 0.45 }),
       mConnect: () => this.connectToggle(), mPower: () => this.powerToggle(), mPush: () => this.push(),
+      copyBleLog: () => this.copyBleLog(), downloadBleLog: () => this.downloadBleLog(), clearBleLog: () => this.clearBleLog(),
+      fps: st.fps, onFps: (e) => this.setFps(parseFloat(e.target.value)),
+      fpsHint: "Lower it if the lights skip; ~4 fps is the full-grid limit",
+      testMotion: () => this.toggleTestMotion(),
+      testMotionLabel: (this.animRunning && st.animationId === "__calib__") ? "Stop test" : "Test",
+      testMotionStyle: Object.assign({}, chipBtn, (this.animRunning && st.animationId === "__calib__") ? { background: "#1f3a2a", color: "#7ee6a3", borderColor: "#2e5a3f", fontWeight: 600 } : {}),
       // menus
       menu: { file: st.openMenu === "file", edit: st.openMenu === "edit", view: st.openMenu === "view", device: st.openMenu === "device", help: st.openMenu === "help" },
       anyMenu: st.openMenu != null,
@@ -1360,10 +1729,17 @@ class Component extends DCLogic {
       mPalette: () => { this.setState({ paletteModal: true, openMenu: null }); },
       paletteModalOpen: st.paletteModal, closePaletteModal: () => this.setState({ paletteModal: false }), stopProp: (e) => e.stopPropagation(),
       erMark: checkMark(st.erasing), ixMark: checkMark(st.showIndices), tpMark: checkMark(st.transpose), fhMark: checkMark(st.flipH), fvMark: checkMark(st.flipV),
+      dbgMark: checkMark(st.debug), mDebug: () => this.toggleDebug(),
       mIndices: () => this.toggleIndices(), mTranspose: () => { this.toggleTranspose(); this.closeMenus(); }, mFlipH: () => { this.toggleFlipH(); this.closeMenus(); }, mFlipV: () => { this.toggleFlipV(); this.closeMenus(); },
       // collapsible sections
+      debug: st.debug,
+      dbgStats: (() => {
+        const r = (window.CG && window.CG.bleRate) ? window.CG.bleRate() : null;
+        if (!r || !r.samples) return "No writes yet. Run the Test or an animation to gather timing.";
+        return "last " + r.lastWriteMs + "ms · " + r.lastPkts + " pkt · avg " + r.avgWriteMs + "ms (~" + r.writeBoundFps + " fps write-bound)";
+      })(),
       expanded: st.expanded, secWrap, secBody,
-      headDesigns, chevDesigns, tDesigns, headEffects, chevEffects, tEffects, headAnimate, chevAnimate, tAnimate,
+      headDesigns, chevDesigns, tDesigns, headEffects, chevEffects, tEffects, headAnimate, chevAnimate, tAnimate, headDebug, chevDebug, tDebug,
       shortcuts: [
         { keys: ["B"], label: "Brush tool" },
         { keys: ["E", "X"], label: "Eraser tool" },
@@ -1386,7 +1762,7 @@ class Component extends DCLogic {
       undo: () => this.undo(), redo: () => this.redo(),
       undoBtn: Object.assign({}, btnGhost, { opacity: this.undoStack.length ? 1 : 0.4 }),
       redoBtn: Object.assign({}, btnGhost, { opacity: this.redoStack.length ? 1 : 0.4 }),
-      gradColor: st.gradColor, onGradColor: (e) => this.setState({ gradColor: e.target.value }, this._persist),
+      gradColor: st.gradColor, onGradColor: (e) => this.setState({ gradColor: e.target.value }, this._persistSoon),
       // approved palette
       paletteOn: st.paletteOn, onTogglePalette: () => this.togglePalette(),
       paletteToggleLabel: st.paletteOn ? "On" : "Off",
@@ -1424,12 +1800,15 @@ class Component extends DCLogic {
       // patterns
       patterns: this.PATTERNS.map((p) => ({ label: p.label, onClick: () => this.buildPattern(p.fn) })),
       // effects
-      effects: this.EFFECTS.map((e) => ({ label: e.label, style: this._btn(st.effect === e.dir), onClick: () => this.setEffect(e.dir) })),
-      effectHex: "0x" + st.effect.toString(16).padStart(2, "0"), effectName,
+      effects: this.EFFECTS.map((e) => ({ label: e.label, style: this._btn(st.effectId === e.id), onClick: () => this.setEffect(e.id) })),
+      effectHex: "0x" + effEntry.dir.toString(16).padStart(2, "0"), effectName,
       numInput, numInputSm,
       // animate
       anims: this.ANIMATIONS.map((a) => ({ label: a.label, style: this._btn(st.animationId === a.id), onClick: () => this.startAnimation(a.id) })),
       stopAnim: () => this.stopAnimation(), animating: st.animationId != null,
+      tests: this.TESTS.map((t) => ({ label: t.label, style: this._btn(false), onClick: () => this.runTest(t.id) })),
+      markSkipHere: () => this.markSkipHere(),
+      capturedScenes: (window.CG_SCENES || []).map((sc) => ({ label: sc.label, style: this._btn(false), onClick: () => this.playCapturedScene(sc) })),
       // import
       fits: ["contain", "cover", "stretch"].map((f) => ({ label: f, style: this._btn(st.fit === f), onClick: () => { this.setState({ fit: f }, () => this.resampleImage({ f })); } })),
       rotateBtn: this._btn(st.rotate),
@@ -1448,7 +1827,12 @@ class Component extends DCLogic {
       // scenes
       sceneName: st.sceneName, onSceneName: (e) => this.setState({ sceneName: e.target.value }), onSceneKey: (e) => { if (e.key === "Enter") this.saveScene(); },
       saveScene: () => this.saveScene(),
-      scenes: st.scenes.map((s, i) => ({ name: s.name, lit: s.colors.filter(Boolean).length, onLoad: () => this.loadScene(i), onDelete: () => this.deleteScene(i) })),
+      scenes: st.scenes.map((s, i) => {
+        const isFrames = Array.isArray(s.frames);
+        const lit = isFrames ? ((s.frames[0] || []).filter(Boolean).length) : ((s.colors || []).filter(Boolean).length);
+        const label = isFrames ? (s.frames.length + " frames") : (s.effectId ? ("fx · " + lit + " lit") : (lit + " lit"));
+        return { name: s.name, label, onLoad: () => this.loadScene(i), onDelete: () => this.deleteScene(i) };
+      }),
       sceneCount: st.scenes.length, hasScenes: st.scenes.length > 0, noScenes: st.scenes.length === 0,
       onImportScenes: async (e) => { const f = e.target.files && e.target.files[0]; if (f) this.importScenes(await f.text()); e.target.value = ""; },
       chipBtn, chipBtnX,

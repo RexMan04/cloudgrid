@@ -5,6 +5,58 @@
 (function () {
   "use strict";
 
+  // ---- BLE diagnostics log -------------------------------------------------
+  // A timestamped ring buffer of BLE events so connection problems (disconnect
+  // storms, slow/failed scene writes, GATT errors) are visible after the fact.
+  // Export the readable text via CG.bleLog() or the "Copy BLE log" button.
+  const BLE_LOG = [];
+  const BLE_LOG_MAX = 1200;
+  let bleT0 = Date.now();
+  function bleLogEvent(type, detail) {
+    const e = { t: Date.now() - bleT0, type };
+    if (detail) Object.assign(e, detail);
+    BLE_LOG.push(e);
+    if (BLE_LOG.length > BLE_LOG_MAX) BLE_LOG.shift();
+    // Mirror the notable events to the console so they're watchable live.
+    if (type === "attach" || type === "disconnect" || type.indexOf("error") >= 0 ||
+        type === "reconnect-ok" || type === "reconnect-giveup") {
+      try { console.log("[BLE +" + e.t + "ms] " + type, detail || ""); } catch (x) {}
+    }
+  }
+  function bleLogText() {
+    const lines = BLE_LOG.map((e) => {
+      const { t, type } = e;
+      const kv = Object.keys(e).filter((k) => k !== "t" && k !== "type").map((k) => k + "=" + e[k]).join(" ");
+      return ("+" + t + "ms").padEnd(11) + String(type).padEnd(16) + kv;
+    });
+    return "CloudGrid BLE log — " + BLE_LOG.length + " events over " + Math.round((Date.now() - bleT0) / 1000) + "s\n" + lines.join("\n");
+  }
+  function bleLogClear() { BLE_LOG.length = 0; bleT0 = Date.now(); }
+
+  // Rolling Bluetooth throughput, so the animation loop can pace itself to what
+  // the link can actually display, and so the achievable frame rate is
+  // inspectable (CG.bleRate()) for planning. Each scene write's wall time is
+  // sampled. The cost is dominated by the per-packet inter-write sleep (see
+  // setScene), so write time scales with packet count, not raw BLE bandwidth:
+  // an 88-segment full-color frame is ~9 packets ≈ 110ms; a 3-packet scroll
+  // frame ≈ 37ms. Measured ceiling: a full-grid frame sustains ~3 writes/sec
+  // before Windows BLE starts dropping the link, so the loop leaves idle time
+  // between writes rather than pushing as fast as the writes return.
+  const BLE_RATE = { last: 0, ema: 0, n: 0, lastPkts: 0 };
+  function bleRateSample(ms, pkts) {
+    BLE_RATE.last = ms; BLE_RATE.lastPkts = pkts;
+    BLE_RATE.ema = BLE_RATE.n ? BLE_RATE.ema + (ms - BLE_RATE.ema) / Math.min(BLE_RATE.n + 1, 20) : ms;
+    BLE_RATE.n++;
+  }
+  function bleRate() {
+    const w = Math.round(BLE_RATE.ema) || 0;
+    return {
+      lastWriteMs: BLE_RATE.last, avgWriteMs: w, lastPkts: BLE_RATE.lastPkts, samples: BLE_RATE.n,
+      // Ceiling if we pushed back-to-back (we don't — a stability gap is added on top).
+      writeBoundFps: w ? Math.round((1000 / w) * 10) / 10 : 0,
+    };
+  }
+
   // ---- packet.ts -----------------------------------------------------------
   // A Govee BLE control packet is 20 bytes: up to 19 payload bytes, zero-padded,
   // then an XOR checksum of the first 19 bytes.
@@ -22,12 +74,16 @@
 
   function buildSceneLeadings(entries, opts) {
     opts = opts || {};
+    // The wire format addresses segments and group sizes with single bytes, so a
+    // scene can carry at most 255 lit segments. The H703B tops out at 90, so this
+    // only guards future, larger controllers from silently wrapping to garbage.
+    if (entries.length > 255) throw new Error("scene has " + entries.length + " lit segments; the 1-byte protocol caps at 255");
     const dir = opts.dir != null ? opts.dir : 0x13;
-    // dir 0x13 is the static/hold scene. The firmware still slowly "flows" a
-    // DIY scene at the header's speed, so force speed 0 for static designs (and
-    // for live-animation frames, which are static scenes the browser swaps) to
-    // keep them frozen. Motion effects (other dir bytes) keep their speed.
-    const speed = dir === 0x13 ? 0 : opts.speed != null ? opts.speed : 0x32;
+    // The caller controls speed. dir 0x13 holds the design static at speed 0 and
+    // smoothly flows the dot colors (Gradient) at speed > 0; the UI passes 0 for
+    // Static and for live-animation frames (which are static scenes it swaps),
+    // and the slider value for Gradient and the motion effects.
+    const speed = opts.speed != null ? opts.speed : 0x32;
     const bright = opts.bright != null ? opts.bright : 0x64;
     const bg = opts.bg || [1, 1, 1];
 
@@ -78,12 +134,22 @@
       this.onReconnect = null; // called when an auto-reconnect succeeds
       this._wantDisconnect = false;
       this._reconnecting = false;
+      this._sceneBusy = false; // true while a multi-packet setScene is in flight
+      this._onGattDisconnect = null; // bound listener, removed before re-adding
     }
     get connected() {
       return !!this.writeChar;
     }
     get name() {
       return (this.device && this.device.name) || "(unknown)";
+    }
+    // Whether silent reconnect-on-load is even possible here. Brave and other
+    // browsers lack getDevices(), so the UI can hint instead of failing silently.
+    static autoReconnectSupported() {
+      return !!(navigator.bluetooth && navigator.bluetooth.getDevices);
+    }
+    static hasKnownDevice() {
+      try { return !!localStorage.getItem(LAST_DEVICE_KEY); } catch (e) { return false; }
     }
     // Pick a device via the browser chooser (requires a user gesture).
     async connect() {
@@ -115,12 +181,19 @@
       this.device = device;
       this._wantDisconnect = false;
       try { localStorage.setItem(LAST_DEVICE_KEY, device.id); } catch (e) {}
-      device.addEventListener("gattserverdisconnected", () => {
+      // getDevices() returns the same BluetoothDevice across reconnects, so drop
+      // any handler from a prior _attach before adding one — otherwise listeners
+      // (and their _autoReconnect calls) accumulate on the long-lived device.
+      if (this._onGattDisconnect) device.removeEventListener("gattserverdisconnected", this._onGattDisconnect);
+      this._onGattDisconnect = () => {
+        bleLogEvent("disconnect", { intentional: this._wantDisconnect });
         this.stopKeepAlive();
         this.writeChar = null;
         if (this.onDisconnect) this.onDisconnect(this._wantDisconnect);
         this._autoReconnect();
-      });
+      };
+      device.addEventListener("gattserverdisconnected", this._onGattDisconnect);
+      bleLogEvent("attach", { name: device.name || "?" });
       await this._openGatt();
     }
     async _openGatt() {
@@ -128,10 +201,11 @@
       // BLE on Windows often fails the first connect; retry a few times.
       for (let attempt = 1; attempt <= 4; attempt++) {
         try { server = await this.device.gatt.connect(); break; }
-        catch (e) { if (attempt === 4) throw e; await sleep(600); }
+        catch (e) { bleLogEvent("gatt-fail", { attempt, err: String((e && e.message) || e).slice(0, 80) }); if (attempt === 4) throw e; await sleep(600); }
       }
       const svc = await server.getPrimaryService(SERVICE);
       this.writeChar = await svc.getCharacteristic(WRITE_CHAR);
+      bleLogEvent("gatt-open");
       this.startKeepAlive();
     }
     // After an unexpected drop, keep retrying GATT (backoff) until it comes back
@@ -140,16 +214,19 @@
       if (this._reconnecting || this._wantDisconnect) return;
       this._reconnecting = true;
       for (let n = 1; n <= 30 && !this._wantDisconnect; n++) {
+        bleLogEvent("reconnect-try", { n });
         await sleep(Math.min(8000, 1000 * n));
         if (this._wantDisconnect) break;
         try {
           await this._openGatt();
           this._reconnecting = false;
+          bleLogEvent("reconnect-ok", { n });
           if (this.onReconnect) this.onReconnect();
           return;
         } catch (e) { /* still down; keep trying */ }
       }
       this._reconnecting = false;
+      if (!this._wantDisconnect) bleLogEvent("reconnect-giveup");
     }
     disconnect() {
       this._wantDisconnect = true;
@@ -165,10 +242,15 @@
     async rawWrite(leading) {
       if (!this.writeChar) throw new Error("not connected");
       const pkt = buildPacket(leading);
-      if (this.writeChar.writeValueWithoutResponse) {
-        await this.writeChar.writeValueWithoutResponse(pkt);
-      } else {
-        await this.writeChar.writeValue(pkt);
+      try {
+        if (this.writeChar.writeValueWithoutResponse) {
+          await this.writeChar.writeValueWithoutResponse(pkt);
+        } else {
+          await this.writeChar.writeValue(pkt);
+        }
+      } catch (e) {
+        bleLogEvent("write-error", { err: String((e && e.message) || e).slice(0, 80) });
+        throw e;
       }
     }
     async powerOn() {
@@ -177,22 +259,61 @@
     async powerOff() {
       await this.send([0x33, 0x01, 0x00]);
     }
-    async setAll(r, g, b) {
-      await this.send([0x33, 0x05, 0x0d, r, g, b]);
-    }
     async setScene(entries, opts) {
       const leadings = buildSceneLeadings(entries, opts);
-      for (const leading of leadings) {
-        await this.send(leading);
-        await sleep(10);
+      const startT = Date.now();
+      bleLogEvent("scene-start", { pkts: leadings.length, segs: entries.length });
+      this._sceneBusy = true;
+      try {
+        for (const leading of leadings) {
+          await this.send(leading);
+          await sleep(10);
+        }
+        await this.send(COMMIT);
+        const ms = Date.now() - startT;
+        bleRateSample(ms, leadings.length);
+        bleLogEvent("scene-end", { ms });
+      } catch (e) {
+        bleLogEvent("scene-error", { ms: Date.now() - startT, err: String((e && e.message) || e).slice(0, 80) });
+        throw e;
+      } finally {
+        this._sceneBusy = false;
       }
-      await this.send(COMMIT);
+    }
+    // Replay a captured on-device-animation scene: send its a3 chunks verbatim
+    // (the same leading bytes the official app sent), then the commit. The
+    // controller animates it itself, so this gives smooth, persistent motion
+    // with no per-frame streaming. `pkts` is an array of 19-byte leadings.
+    async replayScene(pkts) {
+      const startT = Date.now();
+      bleLogEvent("scene-start", { pkts: pkts.length, segs: 0 });
+      this._sceneBusy = true;
+      try {
+        for (const p of pkts) {
+          await this.send(p);
+          await sleep(10);
+        }
+        await this.send(COMMIT);
+        const ms = Date.now() - startT;
+        bleRateSample(ms, pkts.length);
+        bleLogEvent("scene-end", { ms });
+      } catch (e) {
+        bleLogEvent("scene-error", { ms: Date.now() - startT, err: String((e && e.message) || e).slice(0, 80) });
+        throw e;
+      } finally {
+        this._sceneBusy = false;
+      }
     }
     startKeepAlive() {
       this.stopKeepAlive();
+      // Every 5s, but never mid-scene: a keep-alive slotted between a multi-packet
+      // setScene's chunks (they share this.chain) risks the controller
+      // mis-assembling the scene, so skip the tick while a scene send is in flight.
       this.keepAlive = setInterval(() => {
+        if (this._sceneBusy) { bleLogEvent("keepalive-skip"); return; }
+        bleLogEvent("keepalive");
         this.send([0xaa, 0x01]).catch(() => {});
-      }, 2000);
+      }, 5000);
     }
     stopKeepAlive() {
       if (this.keepAlive) {
@@ -280,7 +401,7 @@
   // scale the brightest channel up to 255 for the base, and report that channel
   // as the value. A dark/muddy pick (e.g. a dim brown-red) becomes a vivid base
   // color plus a low brightness, matching the app's color-plus-brightness model.
-  // base × value reproduces the original color, so it's a lossless re-split.
+  // base × value reproduces the original color closely (within 8-bit rounding).
   function decomposeColor(hex) {
     const [r, g, b] = hexToRgb(hex);
     const m = Math.max(r, g, b);
@@ -288,6 +409,30 @@
     const s = 255 / m;
     const h2 = (x) => Math.min(255, Math.round(x * s)).toString(16).padStart(2, "0");
     return { base: "#" + h2(r) + h2(g) + h2(b), value: m / 255 };
+  }
+  // RGB -> HSL (all 0..1).
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    let h = 0, s = 0;
+    if (max !== min) {
+      const dd = max - min;
+      s = l > 0.5 ? dd / (2 - max - min) : dd / (max + min);
+      if (max === r) h = (g - b) / dd + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / dd + 2;
+      else h = (r - g) / dd + 4;
+      h /= 6;
+    }
+    return [h, s, l];
+  }
+  // Rotate a color's hue by `delta` (0..1 around the wheel), keeping its
+  // saturation and lightness. Used for the in-place Gradient color cycle: each
+  // dot changes color where it sits, nothing moves.
+  function hueRotate(hex, delta) {
+    const [r, g, b] = hexToRgb(hex);
+    const [h, s, l] = rgbToHsl(r, g, b);
+    return hslHex((h + delta) % 1, s, l);
   }
 
   // Section/grid layout math. A "logical" index is position along the strip;
@@ -363,8 +508,9 @@
 
   window.CG = {
     GoveeDevice, buildSceneLeadings, buildPacket, COMMIT, sampleSource,
-    hexToRgb, hslHex, dim, lerpHex, decomposeColor,
+    hexToRgb, hslHex, dim, lerpHex, decomposeColor, hueRotate,
     totalSegments, gridWidth, gridDims, visualToLogical, localPhysical, logicalToPhysical, sectionOfLogical,
     nearestPalette, snapColors, shapeCells,
+    bleLog: bleLogText, bleLogClear, bleLogEvent, bleRate,
   };
 })();
