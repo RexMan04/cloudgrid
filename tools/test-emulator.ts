@@ -114,5 +114,58 @@ try {
   console.log(`0x02 palette decode: ${Object.keys(EXPECT_PAL).length - palFail}/${Object.keys(EXPECT_PAL).length} scenes exact`);
 } catch (e) { console.error("palette check skipped:", String(e)); palFail++; }
 
-if (fail || miss || invFail || palFail) { console.error("EMULATOR TEST FAILED"); process.exit(1); }
+// Scene-preview generator sanity: mirror the component's _sceneFrame math (kept
+// in sync with CloudGrid.dc.html) and assert it yields a valid full-length frame
+// of #rrggbb-or-null, with the decoded palette actually appearing. Catches NaN /
+// out-of-range / empty-frame bugs we can't see without a browser.
+const rgbHex = (rgb: number[]) => "#" + rgb.map((x) => (x & 0xff).toString(16).padStart(2, "0")).join("");
+function sceneFrame(meta: any, f: number, total: number) {
+  const pal = meta.palette.map(rgbHex);
+  const speedF = Math.max(0.3, (meta.speed || 32) / 32);
+  const bgMax = Math.max(meta.bg[0], meta.bg[1], meta.bg[2]);
+  const bgHex = bgMax > 8 ? rgbHex(meta.bg) : null;
+  const out: (string | null)[] = new Array(total).fill(bgHex);
+  if (meta.type === 1) {
+    const stops = pal.length;
+    const phase = (f * 0.012 * speedF) % 1;
+    for (let p = 0; p < total; p++) {
+      const x = (((p / total) + phase) % 1) * stops;
+      const i = Math.floor(x) % stops, j = (i + 1) % stops;
+      out[p] = CG.lerpHex(pal[i], pal[j], x - Math.floor(x));
+    }
+  } else {
+    const spacing = Math.max(3, Math.round(total / Math.max(8, pal.length * 5)));
+    const dots = Math.ceil(total / spacing);
+    const offset = f * 0.5 * speedF;
+    for (let i = 0; i < dots; i++) {
+      const pos = ((Math.round(i * spacing + offset) % total) + total) % total;
+      out[pos] = pal[i % pal.length];
+    }
+  }
+  return out;
+}
+let genFail = 0;
+const isHexOrNull = (c: string | null) => c === null || /^#[0-9a-f]{6}$/.test(c);
+try {
+  const scenesText = await Bun.file(new URL("../web/captured-scenes.js", import.meta.url)).text();
+  const arr = JSON.parse(scenesText.slice(scenesText.indexOf("["), scenesText.lastIndexOf("]") + 1));
+  for (const sc of arr) {
+    const meta = CG.decodeParametricScene(sc.pkts);
+    if (!meta || !meta.palette.length) continue;
+    const total = 88;
+    let bad = false, sawPalette = false;
+    const palSet = new Set(meta.palette.map(rgbHex));
+    for (const f of [0, 1, 7, 23, 99]) {
+      const frame = sceneFrame(meta, f, total);
+      if (frame.length !== total || frame.some((c) => !isHexOrNull(c))) { bad = true; break; }
+      if (frame.some((c) => c && palSet.has(c))) sawPalette = true;
+    }
+    // type-1 gradient blends between stops, so exact palette hits aren't required;
+    // type 2/5 place palette colors directly, so they must appear.
+    if (bad || (meta.type !== 1 && !sawPalette)) { genFail++; console.error(`FAIL scene-gen ${sc.label}: bad=${bad} sawPalette=${sawPalette} type=${meta.type}`); }
+  }
+  console.log(`scene-preview generator: ${arr.filter((s: any) => CG.decodeParametricScene(s.pkts)?.palette.length).length - genFail} scenes valid`);
+} catch (e) { console.error("scene-gen check skipped:", String(e)); genFail++; }
+
+if (fail || miss || invFail || palFail || genFail) { console.error("EMULATOR TEST FAILED"); process.exit(1); }
 console.log("EMULATOR TEST PASSED");

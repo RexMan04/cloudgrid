@@ -893,6 +893,7 @@ class Component extends DCLogic {
     await this.queueScene(() => this.device.setScene(entries, { dir: 0x13, speed: 0, bg }));
   }
   async push() {
+    this.stopScenePreview();
     if (this.animRunning) { this.animRunning = false; this.playbackFrames = null; this.setState({ animationId: null, previewColors: null }); }
     if (!this.device || !this.device.connected) return;
     if (this.pushing) { this.pendingPush = true; return; }
@@ -1156,6 +1157,7 @@ class Component extends DCLogic {
     this.setState({ colors: new Array(total).fill(null), bright: new Array(total).fill(100), effectId: "static" });
     if (this.animRunning) { this.animRunning = false; this.setState({ animationId: null, previewColors: null }); }
     this.stopEffectPreview();
+    this.stopScenePreview();
     this.sceneGen++;
     if (this.device && this.device.connected) { this.setState({ status: "Cleared" }); this.queueScene(() => this.device.setScene([], { dir: 0x13, bg: [0, 0, 0] })); }
   }
@@ -1304,15 +1306,23 @@ class Component extends DCLogic {
   // controller animates it itself, so it is smooth and persistent — no frame
   // streaming, no ~5fps cap. Stops any live animation first.
   async playCapturedScene(scene) {
-    if (!this.device || !this.device.connected) { this.setState({ status: "Connect a device to play a scene" }); return; }
-    if (this.animRunning) { this.animRunning = false; this.playbackFrames = null; this.setState({ animationId: null, previewColors: null }); }
+    // Stop any running animation, show the approximate preview on the canvas
+    // (works offline so you can see each scene), and replay the real scene to the
+    // device if connected. The device runs the actual particle program; the
+    // canvas preview is our approximation of it.
+    if (this.animRunning) { this.animRunning = false; this.playbackFrames = null; this.setState({ animationId: null }); }
+    const previewed = this.startScenePreview(scene);
+    if (!previewed) this.setState({ previewColors: null });
+    const connected = this.device && this.device.connected;
     if (window.CG) window.CG.bleLogEvent("replay", { id: scene.id, fmt: scene.fmt, type: scene.type });
-    this.setState({ status: "Playing scene " + scene.label });
+    this.setState({ status: (connected ? "Playing scene " : "Preview only — connect to play ") + scene.label });
+    if (!connected) return;
     try { await this.queueScene(() => this.device.replayScene(scene.pkts)); }
     catch (e) { this.setState({ status: "Scene failed: " + e.message }); }
   }
   startAnimation(id) {
     this.stopEffectPreview();
+    this.stopScenePreview();
     this.playbackFrames = null;
     if (window.CG) window.CG.bleLogEvent("anim-start", { id });
     this.setState({ animationId: id });
@@ -1360,6 +1370,10 @@ class Component extends DCLogic {
         else if (kind === "flash") { const on = f % 2 === 0; preview = colors.map((c) => (c ? (on ? c : this.dim(c, 0.05)) : null)); }
         else if (kind === "spin") { const total = colors.length; const shift = ((spinDir * f) % total + total) % total; preview = colors.map((_, i) => colors[(i - shift + total) % total]); }
         else { const dh = (f * 0.02) % 1; preview = colors.map((c) => (c ? this.hueRotate(c, dh) : null)); }
+        // previewColors carry final colors (the canvas no longer re-applies master
+        // brightness), so bake it in here to keep the preview honest to the slider.
+        const mb = this.state.brightness / 100;
+        if (mb < 1) preview = preview.map((c) => (c ? this.dimHex(c, mb) : c));
         this.setState({ previewColors: preview });
       }
       // Match the live-animation pacing so the slider visibly changes the preview.
@@ -1370,6 +1384,64 @@ class Component extends DCLogic {
   }
   stopEffectPreview() {
     if (this.fxTimer) { clearTimeout(this.fxTimer); this.fxTimer = null; if (!this.animRunning) this.setState({ previewColors: null }); }
+  }
+
+  // ---- device-scene approximate preview ------------------------------------
+  // The rich 0x02 scenes are an on-device particle program we can't reproduce
+  // exactly, so this renders a faithful APPROXIMATION on the canvas: the decoded
+  // palette (exact) animated in the scene's motion family — gradient flow for
+  // type 1, drifting dots for types 2/5. Preview-only: it never streams to the
+  // device, which plays the real scene via replayScene. Colors are final (master
+  // brightness baked in, matching the previewColors contract).
+  startScenePreview(scene) {
+    this.stopScenePreview();
+    this.stopEffectPreview();
+    const meta = window.CG.decodeParametricScene(scene.pkts);
+    if (!meta || !meta.palette.length) return false;
+    this._scene = { meta, frame: 0 };
+    const total = this.totalSegments(this.state.sections);
+    const tick = () => {
+      if (!this._scene) return;
+      this.setState({ previewColors: this._sceneFrame(this._scene.meta, this._scene.frame++, total) });
+      this.sceneTimer = setTimeout(tick, 100);
+    };
+    this.sceneTimer = setTimeout(tick, 0);
+    return true;
+  }
+  stopScenePreview() {
+    if (this.sceneTimer) { clearTimeout(this.sceneTimer); this.sceneTimer = null; }
+    this._scene = null;
+    if (!this.animRunning && this.fxTimer == null) this.setState({ previewColors: null });
+  }
+  // One approximate frame of a parametric scene -> per-logical final colors.
+  _sceneFrame(meta, f, total) {
+    const mb = this.state.brightness / 100;
+    const fin = (hex) => (hex && mb < 1 ? this.dimHex(hex, mb) : hex);
+    const pal = meta.palette.map((rgb) => this._rgbHex(rgb));
+    const speedF = Math.max(0.3, (meta.speed || 32) / 32);
+    const bgMax = Math.max(meta.bg[0], meta.bg[1], meta.bg[2]);
+    const bgHex = bgMax > 8 ? fin(this._rgbHex(meta.bg)) : null; // near-black bg -> unlit cell
+    const out = new Array(total).fill(bgHex);
+    if (meta.type === 1) {
+      // gradient flow: smooth blend through the palette, scrolling slowly
+      const stops = pal.length;
+      const phase = (f * 0.012 * speedF) % 1;
+      for (let p = 0; p < total; p++) {
+        const x = (((p / total) + phase) % 1) * stops;
+        const i = Math.floor(x) % stops, j = (i + 1) % stops;
+        out[p] = fin(this.lerpHex(pal[i], pal[j], x - Math.floor(x)));
+      }
+    } else {
+      // drifting dots: evenly spaced palette dots marching along the strip
+      const spacing = Math.max(3, Math.round(total / Math.max(8, pal.length * 5)));
+      const dots = Math.ceil(total / spacing);
+      const offset = f * 0.5 * speedF;
+      for (let i = 0; i < dots; i++) {
+        const pos = ((Math.round(i * spacing + offset) % total) + total) % total;
+        out[pos] = fin(pal[i % pal.length]);
+      }
+    }
+    return out;
   }
 
   // ---------- scenes ----------
@@ -1687,10 +1759,11 @@ class Component extends DCLogic {
       const logical = this.visualToLogical(vx, vy, d.width, this.state.rows, this.orient());
       const exists = logical < d.total;
       const c = exists ? src[logical] : null;
-      // Show per-cell brightness on the static canvas (animation previews carry
-      // their own final colors, so don't re-dim those).
+      // Show per-cell + master brightness on the STATIC canvas. Any preview
+      // (emulated animation, effect, device scene) carries its own final colors —
+      // brightness already baked in — so show those verbatim, no re-dim.
       const cb = exists && !st.previewColors && st.bright[logical] != null ? st.bright[logical] / 100 : 1;
-      const t = (st.brightness / 100) * cb;
+      const t = st.previewColors ? 1 : (st.brightness / 100) * cb;
       const shown = c && t < 1 ? this.dimHex(c, t) : c;
       const banded = exists && (this.sectionOfLogical(logical, st.sections) % 2 === 1);
       let style;
