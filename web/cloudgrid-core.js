@@ -155,6 +155,37 @@
     return { perSegment: true, dir, speed, bright, bg, phys };
   }
 
+  // Decode the metadata of a rich 0x02 parametric scene (universe, glows, spins,
+  // wave). These are an on-device particle/animation program, not a segment list,
+  // so this does NOT reproduce the exact motion — it extracts what we can render a
+  // faithful APPROXIMATE preview from: the palette, the background, and the motion
+  // family. Returns null for non-0x02 streams.
+  //
+  // Layout (verified across all 7 captured scenes): after the 9-byte header comes
+  // an 11-byte global-parameter preamble, then the palette: a 1-byte color count
+  // at body offset 11, followed by that many RGB triples. The remaining bytes are
+  // the per-particle program (type-dependent), which we don't decode here.
+  //   type: 1 = gradient/glow (palette blended, slow flow)
+  //         2 / 5 = moving dots (palette dots drifting/spinning along the strip)
+  function decodeParametricScene(pkts) {
+    const payload = [];
+    for (const p of pkts) for (let i = 2; i < p.length; i++) payload.push(p[i] & 0xff);
+    if (payload[2] !== 0x02) return null;
+    const type = payload[3], speed = payload[4], bright = payload[5];
+    const bg = [payload[6] & 0xff, payload[7] & 0xff, payload[8] & 0xff];
+    const countIdx = 9 + 11; // header(9) + global-param preamble(11) = palette count
+    const count = payload[countIdx];
+    const palette = [];
+    if (count >= 1 && count <= 32) {
+      let o = countIdx + 1;
+      for (let i = 0; i < count && o + 2 < payload.length; i++) {
+        palette.push([payload[o] & 0xff, payload[o + 1] & 0xff, payload[o + 2] & 0xff]);
+        o += 3;
+      }
+    }
+    return { fmt: 0x02, type, speed, bright, bg, palette };
+  }
+
   // ---- ble.ts --------------------------------------------------------------
   const SERVICE = "00010203-0405-0607-0809-0a0b0c0d1910";
   const WRITE_CHAR = "00010203-0405-0607-0809-0a0b0c0d2b11";
@@ -544,7 +575,7 @@
   }
 
   window.CG = {
-    GoveeDevice, buildSceneLeadings, decodeSceneLeadings, buildPacket, COMMIT, sampleSource,
+    GoveeDevice, buildSceneLeadings, decodeSceneLeadings, decodeParametricScene, buildPacket, COMMIT, sampleSource,
     hexToRgb, hslHex, dim, lerpHex, decomposeColor, hueRotate,
     totalSegments, gridWidth, gridDims, visualToLogical, localPhysical, logicalToPhysical, sectionOfLogical,
     nearestPalette, snapColors, shapeCells,

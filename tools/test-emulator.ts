@@ -89,5 +89,30 @@ for (const { sections, rows } of layouts) {
 }
 console.log(`phys<->logical inverse: ${layouts.length - invFail}/${layouts.length} layouts exact`);
 
-if (fail || miss || invFail) { console.error("EMULATOR TEST FAILED"); process.exit(1); }
+// 0x02 parametric palette decode — the colors must match what's visible on the
+// device. Exact expected palettes hand-decoded from the captured byte streams.
+let palFail = 0;
+const hexOf = (rgb: number[]) => "#" + rgb.map((x) => (x & 0xff).toString(16).padStart(2, "0")).join("");
+const EXPECT_PAL: Record<string, string[]> = {
+  "Universe": ["#0000ff", "#8b00ff", "#0000ff", "#00ffff", "#0000ff", "#8b00ff"],
+  "Amber glow": ["#ff7f00", "#ff4100", "#ffb000"],
+  "Blue-purple spin": ["#0e16fe", "#3607ff"],
+  "Green-purple spin": ["#8b00ff", "#00ff00"],
+  "Blue-green gradient": ["#00ff52", "#000000"],
+};
+try {
+  const scenesText = await Bun.file(new URL("../web/captured-scenes.js", import.meta.url)).text();
+  const arr = JSON.parse(scenesText.slice(scenesText.indexOf("["), scenesText.lastIndexOf("]") + 1));
+  for (const sc of arr) {
+    const meta = CG.decodeParametricScene(sc.pkts);
+    const exp = EXPECT_PAL[sc.label];
+    if (!exp) continue;
+    const got = meta.palette.map(hexOf);
+    const okPal = got.length === exp.length && got.every((c: string, i: number) => c === exp[i]);
+    if (!okPal) { palFail++; console.error(`FAIL palette ${sc.label}: got ${got.join(",")} want ${exp.join(",")}`); }
+  }
+  console.log(`0x02 palette decode: ${Object.keys(EXPECT_PAL).length - palFail}/${Object.keys(EXPECT_PAL).length} scenes exact`);
+} catch (e) { console.error("palette check skipped:", String(e)); palFail++; }
+
+if (fail || miss || invFail || palFail) { console.error("EMULATOR TEST FAILED"); process.exit(1); }
 console.log("EMULATOR TEST PASSED");
