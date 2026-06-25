@@ -839,15 +839,55 @@ class Component extends DCLogic {
     }
     return { entries, bg };
   }
+  // ---- emulator preview ----------------------------------------------------
+  // The on-canvas animation preview is the WIRE decoded, not the raw frame: build
+  // the exact entries sendFrame would send, then run them back through the
+  // controller emulator (CG.decodeSceneLeadings, the inverse of the encoder). The
+  // preview therefore shows the true on-device result — quantized colors and
+  // background fill included — and can't drift from what the lights get. One
+  // buildEntries call feeds both the preview and the send. Returns
+  // { entries, bg, preview }; preview is a per-logical hex array for previewColors.
+  _emulateFrame(logicalColors) {
+    const total = this.totalSegments(this.state.sections);
+    const { entries, bg } = this.buildEntries(logicalColors, null, 24);
+    const leadings = window.CG.buildSceneLeadings(entries, { dir: 0x13, speed: 0, bg });
+    const dec = window.CG.decodeSceneLeadings(leadings, total);
+    const inv = this._physToLogical(total);
+    const preview = new Array(total).fill(null);
+    if (dec.perSegment) {
+      for (let p = 0; p < total; p++) {
+        const lp = inv[p];
+        if (lp == null) continue;
+        const rgb = dec.phys[p];
+        // [1,1,1] is the OFF sentinel the encoder uses for unlit segments; show it
+        // as a dark cell (null), not as near-black #010101.
+        preview[lp] = (rgb[0] === 1 && rgb[1] === 1 && rgb[2] === 1) ? null : this._rgbHex(rgb);
+      }
+    }
+    return { entries, bg, preview };
+  }
+  // Inverse of logicalToPhysical for the current layout: inv[physicalIndex] =
+  // logicalIndex, so a decoded per-physical-segment scene maps back to canvas cells.
+  _physToLogical(total) {
+    const inv = new Array(total).fill(null);
+    for (let p = 0; p < total; p++) inv[this.logicalToPhysical(p, this.state.sections, this.state.rows)] = p;
+    return inv;
+  }
+  _rgbHex(rgb) {
+    const h = (x) => (x & 0xff).toString(16).padStart(2, "0");
+    return "#" + h(rgb[0]) + h(rgb[1]) + h(rgb[2]);
+  }
   // The currently-selected on-device effect entry (dir + hold). Static/Gradient
   // share dir 0x13, so we resolve by id, not dir.
   effectEntry() { return this.EFFECTS.find((e) => e.id === this.state.effectId) || this.EFFECTS[0]; }
-  async sendFrame(logicalColors) {
+  async sendFrame(logicalColors, prebuilt) {
     if (!this.device || !this.device.connected) return;
     // Quantize (animation only, q=24) so smooth gradients collapse into far fewer
     // colors/packets, and let buildEntries pick the background so the dominant
-    // color costs zero bytes. Together these keep per-frame traffic minimal.
-    const { entries, bg } = this.buildEntries(logicalColors, null, 24);
+    // color costs zero bytes. Together these keep per-frame traffic minimal. The
+    // loop passes the entries it already built for the emulated preview, so the
+    // exact same bytes drive the lights and the canvas.
+    const { entries, bg } = prebuilt || this.buildEntries(logicalColors, null, 24);
     // Each live-animation frame is its own static scene; the browser swaps them
     // to make the motion, so the device must HOLD each frame (speed 0).
     await this.queueScene(() => this.device.setScene(entries, { dir: 0x13, speed: 0, bg }));
@@ -997,7 +1037,11 @@ class Component extends DCLogic {
     // bake the current frame in, then push() stops the loop and holds it static.
     if (eff.hold && this.animRunning && this.state.previewColors) {
       const total = this.totalSegments(this.state.sections);
-      const frozen = Array.from({ length: total }, (_, k) => this.state.previewColors[k] || null);
+      // Freeze the RAW frame (full-value design colors), not the device-space
+      // preview — push() re-applies brightness, so baking the dimmed preview would
+      // double-dim. Fall back to previewColors if no raw frame was captured.
+      const frozenSrc = this._lastFrameRaw || this.state.previewColors;
+      const frozen = Array.from({ length: total }, (_, k) => frozenSrc[k] || null);
       this.setState({ colors: frozen, bright: new Array(total).fill(100), effectId: id }, () => { this._persist(); this.push(); this.startEffectPreview(); });
       return;
     }
@@ -1184,7 +1228,14 @@ class Component extends DCLogic {
         ? (this.playbackFrames.length ? this.playbackFrames[this.animFrame % this.playbackFrames.length] : null)
         : (this.state.animationId ? this.computeAnimColors(this.state.animationId, this.animFrame) : null);
       if (!logical) break;
-      this.setState({ previewColors: logical });
+      // Keep the RAW (full-value) frame so a freeze-to-design (setEffect) stores a
+      // proper design, not the brightness-baked preview, which push() would dim again.
+      this._lastFrameRaw = logical;
+      // Emulate the frame: build the wire once, decode it back, and preview THAT.
+      // The canvas now shows exactly what the device renders (same bytes), and the
+      // very entries we previewed are the ones we send.
+      const { entries, bg, preview } = this._emulateFrame(logical);
+      this.setState({ previewColors: preview });
       if (this.device && this.device.connected) {
         // Push this frame and WAIT for the write to drain before advancing, so no
         // two writes overlap (overlap is what floods the link) and every frame is
@@ -1192,7 +1243,7 @@ class Component extends DCLogic {
         // the write actually took.
         this._frameInFlight = true;
         const t0 = Date.now();
-        await this.sendFrame(logical).catch(() => {});
+        await this.sendFrame(logical, { entries, bg }).catch(() => {});
         this._frameInFlight = false;
         const writeMs = Date.now() - t0;
         const gap = Math.max(this.HARD_MIN_GAP_MS, this.sceneIntervalMs() - writeMs);

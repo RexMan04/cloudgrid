@@ -118,6 +118,43 @@
     return packets;
   }
 
+  // The exact inverse of buildSceneLeadings: take the a3 chunks that were (or
+  // would be) sent and reconstruct the on-device segment state. This is the
+  // controller emulator for the per-segment format — the preview renders the same
+  // bytes the device gets, so it can't drift from the wire. `pkts` are the 19-byte
+  // a3 leadings ([0xa3, index, …17 payload bytes]); `total` is the strip's segment
+  // count (the device fills every UNLISTED segment with the background).
+  //
+  // Returns { perSegment, dir, speed, bright, bg, phys }. `perSegment` is false
+  // for the rich 0x02 parametric scenes (a particle program, not a segment list) —
+  // those need a different emulator, so the caller skips static rendering. `phys`
+  // is a length-`total` array of [r,g,b] (background-filled, listed segments
+  // overridden); the OFF sentinel [1,1,1] is preserved verbatim so the round-trip
+  // is exact — turning it back into "unlit" is the caller's display choice.
+  function decodeSceneLeadings(pkts, total) {
+    // Reassemble the flat payload from the chunks (drop the [0xa3, index] header
+    // on each). Packet boundaries are irrelevant: the device concatenates too.
+    const payload = [];
+    for (const p of pkts) for (let i = 2; i < p.length; i++) payload.push(p[i] & 0xff);
+    const fmt = payload[2];
+    const dir = payload[3], speed = payload[4], bright = payload[5];
+    const bg = [payload[6] & 0xff, payload[7] & 0xff, payload[8] & 0xff];
+    if (fmt !== 0x03) return { perSegment: false, dir, speed, bright, bg, phys: null };
+    const groupCount = payload[9];
+    const phys = new Array(total);
+    for (let i = 0; i < total; i++) phys[i] = [bg[0], bg[1], bg[2]];
+    let o = 10;
+    for (let gi = 0; gi < groupCount; gi++) {
+      const segCount = payload[o++] & 0xff;
+      const r = payload[o++] & 0xff, g = payload[o++] & 0xff, b = payload[o++] & 0xff;
+      for (let s = 0; s < segCount; s++) {
+        const seg = payload[o++] & 0xff;
+        if (seg < total) phys[seg] = [r, g, b];
+      }
+    }
+    return { perSegment: true, dir, speed, bright, bg, phys };
+  }
+
   // ---- ble.ts --------------------------------------------------------------
   const SERVICE = "00010203-0405-0607-0809-0a0b0c0d1910";
   const WRITE_CHAR = "00010203-0405-0607-0809-0a0b0c0d2b11";
@@ -507,7 +544,7 @@
   }
 
   window.CG = {
-    GoveeDevice, buildSceneLeadings, buildPacket, COMMIT, sampleSource,
+    GoveeDevice, buildSceneLeadings, decodeSceneLeadings, buildPacket, COMMIT, sampleSource,
     hexToRgb, hslHex, dim, lerpHex, decomposeColor, hueRotate,
     totalSegments, gridWidth, gridDims, visualToLogical, localPhysical, logicalToPhysical, sectionOfLogical,
     nearestPalette, snapColors, shapeCells,
