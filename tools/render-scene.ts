@@ -41,6 +41,8 @@ function sceneFrame(f: number, total: number): (number[] | null)[] {
       out[p] = pal[ci].map((c: number) => Math.round(c * tw));
     }
   }
+  const half = Math.floor(total / 2); // mirror across the 2 strands
+  if (half > 0) for (let p = half; p < total; p++) out[p] = out[p - half];
   return out;
 }
 

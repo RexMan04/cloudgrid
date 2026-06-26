@@ -144,6 +144,8 @@ function sceneFrame(meta: any, f: number, total: number) {
       out[p] = rgbHex(rgb);
     }
   }
+  const half = Math.floor(total / 2); // mirror across the 2 strands
+  if (half > 0) for (let p = half; p < total; p++) out[p] = out[p - half];
   return out;
 }
 let genFail = 0;

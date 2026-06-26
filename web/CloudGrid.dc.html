@@ -1446,6 +1446,11 @@ class Component extends DCLogic {
         out[p] = fin(this.dimHex(pal[ci], tw));
       }
     }
+    // The H703B drives 2 strands and mirrors the program across them: whatever
+    // plays on the first half shows identically on the second. Copy the first half
+    // onto the second so the preview matches (confirmed from the real lights).
+    const half = Math.floor(total / 2);
+    if (half > 0) for (let p = half; p < total; p++) out[p] = out[p - half];
     return out;
   }
 
