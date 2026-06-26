@@ -135,11 +135,13 @@ function sceneFrame(meta: any, f: number, total: number) {
     }
   } else {
     const len = pal.length;
-    const blockW = Math.max(1, Math.round(total / 30)); // ~30 dots around the grid
-    const scroll = f * 0.6 * speedF;
+    const drift = f * 0.06 * speedF;
     for (let p = 0; p < total; p++) {
-      const idx = Math.floor((p + scroll) / blockW);
-      out[p] = pal[((idx % len) + len) % len];
+      const ci = (((Math.floor(p + drift)) % len) + len) % len;
+      // twinkle dims the palette color; mirror as a plain scale for the fill check
+      const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(p * 0.7 + f * 0.18 * speedF));
+      const rgb = meta.palette[ci].map((x: number) => Math.round((x & 0xff) * tw));
+      out[p] = rgbHex(rgb);
     }
   }
   return out;
@@ -153,18 +155,17 @@ try {
     const meta = CG.decodeParametricScene(sc.pkts);
     if (!meta || !meta.palette.length) continue;
     const total = 88;
-    let bad = false, sawPalette = false, fills = true;
-    const palSet = new Set(meta.palette.map(rgbHex));
+    let bad = false, fills = true;
     for (const f of [0, 1, 7, 23, 99]) {
       const frame = sceneFrame(meta, f, total);
       if (frame.length !== total || frame.some((c) => !isHexOrNull(c))) { bad = true; break; }
-      if (frame.some((c) => c && palSet.has(c))) sawPalette = true;
       if (frame.some((c) => c === null)) fills = false; // every cell lit?
     }
-    // Both families fill the entire grid (these scenes light every segment).
-    // type-1 gradient blends between stops, so exact palette hits aren't required;
-    // type 2/5 place palette colors directly, so they must appear.
-    if (bad || !fills || (meta.type !== 1 && !sawPalette)) { genFail++; console.error(`FAIL scene-gen ${sc.label}: bad=${bad} fills=${fills} sawPalette=${sawPalette} type=${meta.type}`); }
+    // Both families fill the entire grid (these scenes light every segment): every
+    // cell is a valid color, none null. (Colors are brightness-modulated palette /
+    // gradient blends, so exact palette equality isn't asserted here — the palette
+    // decode test above already pins the exact colors.)
+    if (bad || !fills) { genFail++; console.error(`FAIL scene-gen ${sc.label}: bad=${bad} fills=${fills} type=${meta.type}`); }
   }
   console.log(`scene-preview generator: ${arr.filter((s: any) => CG.decodeParametricScene(s.pkts)?.palette.length).length - genFail} scenes valid`);
 } catch (e) { console.error("scene-gen check skipped:", String(e)); genFail++; }

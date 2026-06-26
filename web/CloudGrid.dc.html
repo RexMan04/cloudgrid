@@ -1432,15 +1432,18 @@ class Component extends DCLogic {
         out[p] = fin(this.lerpHex(pal[i], pal[j], x - Math.floor(x)));
       }
     } else {
-      // moving dots: the whole strip is filled with palette-color blocks that
-      // scroll along it, so it reads as dots rotating/drifting. These scenes light
-      // EVERY segment — not sparse dots on a dark grid.
+      // twinkling field: every segment is lit with a palette color (the palette is
+      // cycled per dot, so a blue-heavy palette like Universe stays blue-dominant),
+      // and each dot's brightness oscillates out of phase so the grid shimmers,
+      // with a slow drift along the strip. Matches the real scenes — a full grid of
+      // colors at varying brightness, not solid marching bands. Bright dots are the
+      // full palette color (which reads near-white when very bright), not white.
       const len = pal.length;
-      const blockW = Math.max(1, Math.round(total / 30)); // ~30 dots around the grid
-      const scroll = f * 0.6 * speedF;
+      const drift = f * 0.06 * speedF;
       for (let p = 0; p < total; p++) {
-        const idx = Math.floor((p + scroll) / blockW);
-        out[p] = fin(pal[((idx % len) + len) % len]);
+        const ci = (((Math.floor(p + drift)) % len) + len) % len;
+        const tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(p * 0.7 + f * 0.18 * speedF));
+        out[p] = fin(this.dimHex(pal[ci], tw));
       }
     }
     return out;

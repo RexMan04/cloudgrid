@@ -12,6 +12,11 @@ node_modules/
 captures/
 *.zip
 
+# Reference videos/photos of the lights (calibration artifacts, often large)
+*.mov
+*.mp4
+*:Zone.Identifier
+
 # OS cruft
 .DS_Store
 
