@@ -1,0 +1,8 @@
+node_modules
+captures
+Plans
+*.mov
+*.mp4
+*.log
+*.zip
+.git
