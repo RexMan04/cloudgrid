@@ -56,7 +56,7 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - [ ] ISC-19: Device-scene preview mirrors across 2 strands (first 44 == second 44). Probe: git e5c6748 behavior on canvas.
 - [ ] ISC-20: Clean checkout reproduces toolchain via `mise install` then `bun start`. Probe: fresh clone run.
 - [ ] ISC-21: Railway deploy serves the app from `oven/bun` image. Probe: deployed URL responds.
-- [ ] ISC-22: Renovate detects bun-toolchain, Dockerfile, and package deps. Probe: renovate local dry-run lists them.
+- [x] ISC-22: Renovate detects bun-toolchain, Dockerfile, and package deps. Probe: renovate local dry-run lists them.
 - [x] ISC-23: Anti: app never requires a Govee cloud account or API key for device control. Probe: grep for cloud API calls in server/.
 - [x] ISC-24: Anti: no runtime npm dependencies creep into server/. Probe: package.json dependencies absent.
 - [ ] ISC-25: Anti: no dependency update lands on the deployed app without a human-merged PR. Probe: Renovate PR flow once app installed.
@@ -101,5 +101,6 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 
 ## Verification
 
+- ISC-22: Bash — `renovate --platform=local` (node 24 via mise, GITHUB_COM_TOKEN set): extraction stats `{"bun": 1, "dockerfile": 1, "mise": 1}` files/deps; mise entry resolved to `oven-sh/bun` github-releases with `^bun-v` extractVersion and `updates: []` because 1.3.14 IS the latest release (confirmed via `gh api`). Gotchas recorded: local platform only sees git-TRACKED files, and github-releases lookups need `GITHUB_COM_TOKEN` locally.
 - ISC-23: Grep — `grep -rniE "govee.*cloud|api\.govee|developer-api" server/` exits 1, zero matches.
 - ISC-24: Grep — `grep -c '"dependencies"' package.json` returns 0; no runtime deps key exists.
