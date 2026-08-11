@@ -38,6 +38,19 @@ Two kinds of motion are available: the device's **native effects** (persistent, 
 - A Chromium browser with Web Bluetooth: **Chrome or Edge** out of the box, or **Brave** with `brave://flags/#brave-web-bluetooth-api` enabled.
 - A Govee **H703B** dot-string light. That's the only device I've built and tested against. Other Govee RGBIC devices that use the same DIY-scene Bluetooth protocol may work, but I haven't tried them yet (adapting to more devices is a possible future step).
 
+## Stack
+
+The machine-readable source of truth for the toolchain is [`mise.toml`](mise.toml) — run `mise install` in this directory to reproduce it. What the project runs on:
+
+| Layer | What | Pinned in |
+|---|---|---|
+| Runtime | Bun (server is pure Bun stdlib, TypeScript executed directly) | `mise.toml`, `Dockerfile` (`oven/bun`) |
+| Dev types | `@types/bun` | `package.json` |
+| Deploy | Railway, via `Dockerfile` + `railway.json` | `Dockerfile` |
+| Browser APIs | Web Bluetooth (no server-side dependency) | n/a |
+
+Dependency updates are automated by [Renovate](renovate.json): it opens one PR per update (bun toolchain bumps are grouped), the PR is the review gate, and `git revert` of the merge is the rollback. Nothing lands without a human merging it.
+
 ## Run
 
 ```bash
