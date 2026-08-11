@@ -4,8 +4,14 @@
     "config:recommended",
     ":dependencyDashboard"
   ],
-  "description": "CloudGrid dependency automation: bun packages, Dockerfile base image, and the mise.toml toolchain. Detection is automatic; nothing merges without review.",
+  "description": "CloudGrid dependency automation: bun packages, Dockerfile base image, and the mise.toml toolchain. Detection is automatic; nothing merges without review. Dashboard-approval mode: Renovate opens no PR until it is ticked on the dependency dashboard, so the first-run experience is one dashboard issue, not a PR flood.",
   "rangeStrategy": "pin",
+  "dependencyDashboardApproval": true,
+  "prConcurrentLimit": 3,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
   "packageRules": [
     {
       "description": "Group Bun ecosystem updates (mise pin + oven/bun image + @types/bun) into one PR",
