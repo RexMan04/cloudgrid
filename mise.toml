@@ -1,0 +1,7 @@
+# Toolchain manifest — the machine-readable source of truth for what this
+# project runs on. README § Stack describes; this file declares.
+# `mise install` in this directory reproduces the toolchain.
+# Renovate's mise manager watches these pins and proposes bumps as PRs.
+
+[tools]
+bun = "1.3.14"
