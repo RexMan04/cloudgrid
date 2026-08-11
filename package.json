@@ -10,6 +10,6 @@
     "decode": "bun tools/decode-btsnoop.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "1.3.14"
   }
 }
