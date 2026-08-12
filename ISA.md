@@ -60,6 +60,14 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - [x] ISC-23: Anti: app never requires a Govee cloud account or API key for device control. Probe: grep for cloud API calls in server/.
 - [x] ISC-24: Anti: no runtime npm dependencies creep into server/. Probe: package.json dependencies absent.
 - [ ] ISC-25: Anti: no dependency update lands on the deployed app without a human-merged PR. Probe: Renovate PR flow once app installed.
+- [ ] ISC-26: Renovate App dashboard issue lists bun, dockerfile, and mise surfaces on GitHub. Probe: gh issue body.
+- [ ] ISC-27: CI workflow exists and passes on master. Probe: gh run green.
+- [ ] ISC-28: CI installs the toolchain from mise.toml via jdx/mise-action (no setup-node/npm). Probe: run log + workflow grep.
+- [ ] ISC-29: `tsc --noEmit` runs as the real CI check and passes. Probe: green step in run log.
+- [ ] ISC-30: gitleaks scans the repo in CI and passes. Probe: green gitleaks job.
+- [ ] ISC-31: gitleaks pre-commit hook blocks a staged fake secret locally. Probe: commit attempt fails.
+- [ ] ISC-32: Dependabot vulnerability alerts enabled on the repo. Probe: gh api vulnerability-alerts returns 204.
+- [ ] ISC-33: Anti: Dependabot automated security-fix PRs stay disabled; Renovate is the sole fixer. Probe: gh api automated-security-fixes enabled:false.
 
 ## Test Strategy
 

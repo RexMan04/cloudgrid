@@ -51,6 +51,12 @@ The machine-readable source of truth for the toolchain is [`mise.toml`](mise.tom
 
 Dependency updates are automated by [Renovate](renovate.json): it opens one PR per update (bun toolchain bumps are grouped), the PR is the review gate, and `git revert` of the merge is the rollback. Nothing lands without a human merging it.
 
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) installs the toolchain from `mise.toml` via `jdx/mise-action`, then typechecks (`tsc --noEmit`) and secret-scans (`gitleaks`). To get the same secret scan locally as a pre-commit hook, run once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ## Run
 
 ```bash

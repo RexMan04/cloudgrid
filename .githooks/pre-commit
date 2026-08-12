@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Block commits containing secrets. gitleaks is installed via mise (mise.toml).
+# Enable once per clone: git config core.hooksPath .githooks
+exec mise x -- gitleaks git --pre-commit --staged --redact --verbose
