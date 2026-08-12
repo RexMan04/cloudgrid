@@ -6,7 +6,7 @@ phase: complete
 progress: seeded
 mode: project
 started: 2026-08-10
-updated: 2026-08-10
+updated: 2026-08-12
 ---
 
 ## Problem
@@ -60,14 +60,14 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - [x] ISC-23: Anti: app never requires a Govee cloud account or API key for device control. Probe: grep for cloud API calls in server/.
 - [x] ISC-24: Anti: no runtime npm dependencies creep into server/. Probe: package.json dependencies absent.
 - [ ] ISC-25: Anti: no dependency update lands on the deployed app without a human-merged PR. Probe: Renovate PR flow once app installed.
-- [ ] ISC-26: Renovate App dashboard issue lists bun, dockerfile, and mise surfaces on GitHub. Probe: gh issue body.
-- [ ] ISC-27: CI workflow exists and passes on master. Probe: gh run green.
-- [ ] ISC-28: CI installs the toolchain from mise.toml via jdx/mise-action (no setup-node/npm). Probe: run log + workflow grep.
-- [ ] ISC-29: `tsc --noEmit` runs as the real CI check and passes. Probe: green step in run log.
-- [ ] ISC-30: gitleaks scans the repo in CI and passes. Probe: green gitleaks job.
-- [ ] ISC-31: gitleaks pre-commit hook blocks a staged fake secret locally. Probe: commit attempt fails.
-- [ ] ISC-32: Dependabot vulnerability alerts enabled on the repo. Probe: gh api vulnerability-alerts returns 204.
-- [ ] ISC-33: Anti: Dependabot automated security-fix PRs stay disabled; Renovate is the sole fixer. Probe: gh api automated-security-fixes enabled:false.
+- [x] ISC-26: Renovate App dashboard issue lists bun, dockerfile, and mise surfaces on GitHub. Probe: gh issue body.
+- [x] ISC-27: CI workflow exists and passes on master. Probe: gh run green.
+- [x] ISC-28: CI installs the toolchain from mise.toml via jdx/mise-action (no setup-node/npm). Probe: run log + workflow grep.
+- [x] ISC-29: `tsc --noEmit` runs as the real CI check and passes. Probe: green step in run log.
+- [x] ISC-30: gitleaks scans the repo in CI and passes. Probe: green gitleaks job.
+- [x] ISC-31: gitleaks pre-commit hook blocks a staged fake secret locally. Probe: commit attempt fails.
+- [x] ISC-32: Dependabot vulnerability alerts enabled on the repo. Probe: gh api vulnerability-alerts returns 204.
+- [x] ISC-33: Anti: Dependabot automated security-fix PRs stay disabled; Renovate is the sole fixer. Probe: gh api automated-security-fixes enabled:false.
 
 ## Test Strategy
 
@@ -79,6 +79,9 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 | 22 | tooling | renovate --platform=local dry-run | 3 managers detected | Bash |
 | 23-24 | anti | grep server/ for cloud calls; package.json deps | zero | Grep |
 | 25 | process | Renovate PR exists before any dep change | PR per bump | GitHub |
+| 26-30 | ci | dashboard issue body; gh run jobs green; run log PATH shows mise-installed bun+gitleaks | success | gh |
+| 31 | hook | stage fake secret, attempt commit | exit 1, finding shown | Bash |
+| 32-33 | repo-settings | gh api vulnerability-alerts (204) and automated-security-fixes (enabled:false) | exact | gh |
 
 ## Features
 
@@ -99,6 +102,10 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - 2026-08-10: ISC count (25) sits under the E3 soft floor of 32; show-your-math: seeded from documented surface only, without inventing untestable criteria. The count grows as real work touches the project.
 - 2026-08-10: Toolchain convention adopted: `mise.toml` declares (bun 1.3.14), README § Stack describes, `renovate.json` automates detection, PR merge is the only application path, `git revert` is rollback.
 - 2026-08-10: `@types/bun` pinned from `latest` to `1.3.14` — an unpinned range is invisible to update automation and drifts silently.
+- 2026-08-12: Renovate onboarded in "Scan and Alert" mode (Scan Only is silent: no dashboard, no PRs). Hosted first-run verified: dashboard issue #1 lists all three surfaces, lock-file maintenance sits in Pending Approval per our config.
+- 2026-08-12: gitleaks delivered through mise (8.30.1 in mise.toml) instead of gitleaks-action, so pre-commit and CI share one pinned binary and mise.toml stays the single toolchain source. If Renovate's mise manager can't track the aqua-backed gitleaks version, the pin just sits static; acceptable.
+- 2026-08-12: Dependabot alerts enabled, automated security fixes left disabled: Renovate vulnerabilityAlerts is the sole fixer, avoiding duplicate PRs.
+- 2026-08-12: E2 delegation floor relaxed (show-your-math): every step was a sub-30s direct tool call (4 file writes, 3 API calls, 1 CI watch); an agent handoff costs more than the tier budget.
 
 ## Changelog
 
@@ -112,3 +119,11 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - ISC-22: Bash — `renovate --platform=local` (node 24 via mise, GITHUB_COM_TOKEN set): extraction stats `{"bun": 1, "dockerfile": 1, "mise": 1}` files/deps; mise entry resolved to `oven-sh/bun` github-releases with `^bun-v` extractVersion and `updates: []` because 1.3.14 IS the latest release (confirmed via `gh api`). Gotchas recorded: local platform only sees git-TRACKED files, and github-releases lookups need `GITHUB_COM_TOKEN` locally.
 - ISC-23: Grep — `grep -rniE "govee.*cloud|api\.govee|developer-api" server/` exits 1, zero matches.
 - ISC-24: Grep — `grep -c '"dependencies"' package.json` returns 0; no runtime deps key exists.
+- ISC-26: gh — issue #1 "Dependency Dashboard" body shows Detected Dependencies: bun (package.json), dockerfile (oven/bun), mise (bun 1.3.14).
+- ISC-27: gh — run 31626334113 conclusion "success" on master push f4a79d5.
+- ISC-28: gh — run log: `mise install` in jdx/mise-action@v4.2.4, PATH gains `installs/bun/1.3.14/bin` and `installs/gitleaks/8.30.1`; workflow contains no setup-node/npm step.
+- ISC-29: gh — typecheck job: `bunx tsc --noEmit` step green in 10s.
+- ISC-30: gh — gitleaks job green; full-history pre-scan locally: "44 commits scanned … no leaks found".
+- ISC-31: Bash — staged fake AWS key, `git commit` exited 1 with generic-api-key finding; hook also ran clean on the real commit (0 leaks, commit f4a79d5 created).
+- ISC-32: gh — `PUT /vulnerability-alerts` then `GET` both return HTTP 204.
+- ISC-33: gh — `GET /automated-security-fixes` returns `{"enabled":false,"paused":false}`.
