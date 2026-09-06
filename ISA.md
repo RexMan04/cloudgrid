@@ -2,8 +2,8 @@
 project: CloudGrid
 task: System of record for CloudGrid (Govee H703B per-segment designer)
 effort: E3
-phase: complete
-progress: 23/24 (multi-device, N lights; ISC-30 deferred to hardware)
+phase: verify
+progress: 37/40 (ISC-30, 58, 59 deferred to hardware) (multi-device, N lights; ISC-30 deferred to hardware)
 mode: project
 started: 2026-08-10
 updated: 2026-09-06
@@ -85,6 +85,25 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - [x] ISC-45: Section cap is 2 per light for any light count. Probe: 3 lights, 5 adds → 6 sections, 264 segments.
 - [x] ISC-46: Removing a light drops its sections and renumbers higher lights. Probe: remove light 2 of 3 → secs [0,1,0,1], 2 rows.
 - [x] ISC-47: Light count persists and never drops below what sections reference. Probe: Read load path (`lightCount`, maxDev+1).
+
+### Light placement + calibration (2026-09-06): blocks, identify, walk
+
+- [x] ISC-48: Each light has its own `{x, y, rows, transpose, flipH, flipV}`; the canvas is the bounding box of all light blocks. Probe: `bun tools/test-layout.ts` canvasDims assertions.
+- [x] ISC-49: `canvasToLogical` / `logicalToCanvas` are exact inverses for every existing logical index. Probe: test-layout round-trip fuzz.
+- [x] ISC-50: A single light at (0,0) renders identically to the legacy global-orient grid. Probe: test-layout legacy-equality fuzz.
+- [x] ISC-51: Sections are stored grouped by light (stable). Probe: browser eval after toggling S1 to Light 2 → order regroups.
+- [x] ISC-52: Legacy saved rows/transpose/flip migrate into light 1; added lights copy the last light's run length and orientation and sit to its right. Probe: Read load path + browser eval of lights after add.
+- [x] ISC-53: Calibrate card selects a light and edits ITS run length, transpose, flips, and X/Y. Probe: screenshot + eval of lights[1] after edits.
+- [x] ISC-54: View-menu Transpose/Flip act on the selected light. Probe: grep bindings.
+- [x] ISC-55: Layout mode: dragging a block on the canvas moves that light's x/y; canvas grows to fit. Probe: browser pointer sequence, lights[1].x changes.
+- [x] ISC-56: Layout mode tints each light's block and labels it. Probe: screenshot.
+- [x] ISC-57: Uncovered canvas cells are dead: not paintable, not counted, transparent. Probe: eval total unchanged after placing a gap; paint on gap no-op.
+- [DEFERRED-VERIFY] ISC-58: Identify flashes only that light white for ~1.5 s on its own link, then restores the design. Probe: Read code; hardware DEFERRED.
+- [DEFERRED-VERIFY] ISC-59: Walk lights one physical segment at a time on that controller while the matching canvas cell lights, at the animation fps. Probe: browser eval of previewColors moving; hardware DEFERRED.
+- [x] ISC-60: Walk and Identify stop any running animation first and never overlap a push. Probe: Read code (sceneGen bump + queueScene).
+- [x] ISC-61: Anti: single-light layouts already calibrated render and push byte-identically after migration. Probe: test-layout (ISC-50) + splitScenes identity.
+- [x] ISC-62: Anti: no runtime dependency added. Probe: package.json.
+- [x] ISC-63: README documents Layout mode, Identify, Walk. Probe: grep README.
 - [x] ISC-24: Anti: no runtime npm dependencies creep into server/. Probe: package.json dependencies absent.
 - [ ] ISC-25: Anti: no dependency update lands on the deployed app without a human-merged PR. Probe: Renovate PR flow once app installed.
 - [x] ISC-26: Renovate App dashboard issue lists bun, dockerfile, and mise surfaces on GitHub. Probe: gh issue body.
@@ -123,6 +142,11 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 | Scene persistence | ISC-18 | canvas | yes |
 | Deploy + toolchain convention | ISC-20..22, 25 | none | yes |
 
+| Block layout core (`layoutBlocks`, `canvasDims`, `canvasToLogical`, `logicalToCanvas`, grouped sections) | ISC-48..51, 61 | none | yes |
+| Per-light calibrate card (light picker; rows, transpose, flips, x/y per light; View menu acts on the picked light) | ISC-52..54 | Block layout core | no |
+| Layout mode drag (tinted labelled blocks, grab-offset drag, frozen canvas during drag, nudges) | ISC-55..57 | Block layout core | no |
+| Identify + Walk (per-light flash; segment walk mirrored on canvas, paced by write drain) | ISC-58..60 | Block layout core | no |
+
 ## Decisions
 
 - 2026-08-10: ISA seeded from README + git log as part of the projects-convention pilot. All feature ISCs seeded UNCHECKED even though the README claims them working: a checkmark asserts a live probe happened, and documentation is not a probe (advisor caught an initial draft that laundered README claims into `[x]` marks). Only session-probed criteria carry `[x]`. First future session touching a feature promotes its ISC by probing it.
@@ -135,6 +159,8 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - 2026-08-12: E2 delegation floor relaxed (show-your-math): every step was a sub-30s direct tool call (4 file writes, 3 API calls, 1 CI watch); an agent handoff costs more than the tier budget.
 
 - 2026-09-06 — Multi-device: per-section `dev` ownership over a device-boundary index (allows interleaved sections); global physical index stays flat so calibration math is untouched; scene split lives in core (`splitScenes`) so the byte-identity test hits real code. Advisor (Inference.ts) reviewed pre-build; applied: allSettled fan-out, blank scene for a light with no sections, persisted seed flag, duplicate-id guard. Delegation floor relaxed: two files sharing one state model, a parallel writer would collide. Project ISA edited directly (ISA skill CLI still deferred per v6.2.x note).
+
+- 2026-09-06 — Block layout: per-section `dev` stays, sections regroup by light on every set so the flat logical run is contiguous per light and all existing calibration math survives; each light is a placed block, canvas = bounding box; canvas size is frozen for the duration of a drag (advisor trap: re-centring grid chased the pointer, observed as a 1-row overshoot before the fix); paint stays per logical index so dead cells cannot hold colour; walk is drain-paced. Forge quota-blocked → core written by Atlas; delegation floor relaxed (show-math: one state model, two files).
 
 ## Changelog
 
@@ -175,3 +201,13 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - Browser: DOM-driven toggle S2 Light 1→2→1 persisted `[0,1,1,1]` then `[0,0,1,1]`; console errors excluding favicon: 0.
 - Hardware: NOT yet seen on the ceiling. Two-link BLE throughput on this BlueZ stack is unmeasured (advisor flag).
 - ISC-43..47 (2026-09-06, N lights): playwright-cli DOM-driven run on localhost — 2× "+ Add light" → rows LIGHT 1,2,3; S2 cycle → dev 2; 5× "+ Add" → secs [0,2,0,1,1,2], Grid 24 × 11, 264 segments; ✕ on light 2 → secs [0,1,0,1], 2 rows; console errors 0. `bun tools/test-layout.ts` 19729 passed (2–6 lights, interleaved).
+- ISC-48..50, 61 (2026-09-06, blocks): `bun tools/test-layout.ts` — 29729 passed, 0 failed (round-trip on 1–4 lights, legacy single-light equality, 4-arg logicalToPhysical parity).
+- ISC-51, 52: legacy localStorage {sections dev 0,0,1,1, rows 11, flipH, lightCount 2} loaded → lights [[0,0],[8,0]] both flipH, sections grouped, Grid 16 × 11 (browser eval + screenshot migrated.png).
+- ISC-53, 54: Flip ↔ with Light 1 picked → lights[0].flipH false, lights[1].flipH unchanged; View-menu marks read `cl.*` (grep).
+- ISC-55: real-mouse drag (playwright-cli mousemove/mousedown/mouseup) of Light 2 from cell (9,1) to (9,3) → lights[1] = [8,2] exactly, canvas frozen during drag; ▶ nudge → x+1.
+- ISC-56: screenshot dragged.png — Light 1 green outline with L1 label, Light 2 blue with L2, dead cells dashed.
+- ISC-57: click on gap cell (9,0) after moving Light 2 → Lit segments unchanged (0); click on a Light 2 cell → 1.
+- ISC-58, 59: DEFERRED-VERIFY, hardware. Code: identify() stops motion, writes bg white on that slot only, waits 1.5 s, push(); startWalk() awaits each single-segment write before stepping. Preview-only walk verified: status "Walking Light 1 · segment N of 88", exactly one white cell, "Walk stopped" after Stop.
+- ISC-60: grep — identify/startWalk call stopMotion() (stopAnimation + sceneGen++); push() and startAnimation() clear `walking`.
+- ISC-62: package.json unchanged. ISC-63: README "Placing and calibrating several lights" section.
+- Console errors across all runs: 0 (favicon excluded). Forge unavailable (OpenAI usage limit); core written in-family, advisor (Inference.ts) reviewed the design after one timeout.

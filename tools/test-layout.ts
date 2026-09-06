@@ -12,7 +12,7 @@
 const src = await Bun.file(new URL("../web/cloudgrid-core.js", import.meta.url)).text();
 (0, eval)(src);
 const CG = (globalThis as any).CG;
-const { deviceLayout, splitScenes, buildSceneLeadings, decodeSceneLeadings, totalSegments } = CG;
+const { deviceLayout, splitScenes, buildSceneLeadings, decodeSceneLeadings, totalSegments, layoutBlocks, canvasDims, canvasToLogical, logicalToCanvas, visualToLogical, logicalToPhysical, sectionsGroupedByDev, gridWidth, gridDims } = CG;
 
 let seed = 987654321;
 const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
@@ -80,6 +80,57 @@ for (let iter = 0; iter < 2000; iter++) {
   for (let g = 0; g < total; g++) { const o = lay.owner[g]; back[g] = dec[o.dev].phys[o.idx]; }
   const same = phys.every((c, g) => { const want = c || [1, 1, 1]; const got = back[g]; return got && got[0] === want[0] && got[1] === want[1] && got[2] === want[2]; });
   check(same, "two-light encode→decode→reassemble reproduces the frame");
+}
+
+// --- 3. light blocks: round trip, legacy equality, per-light rows (ISC-48..50, 61) ---
+for (let iter = 0; iter < 2000; iter++) {
+  const nl = 1 + ri(4);
+  const sections: any[] = [];
+  for (let dev = 0; dev < nl; dev++) for (let k = 0; k < 1 + ri(2); k++) sections.push({ length: 1 + ri(45), reversed: rnd() < 0.5, serpentine: rnd() < 0.5, dev });
+  // shuffle so grouping is exercised
+  for (let i = sections.length - 1; i > 0; i--) { const j = ri(i + 1); [sections[i], sections[j]] = [sections[j], sections[i]]; }
+  const lights: any[] = [];
+  let cx = 0;
+  for (let dev = 0; dev < nl; dev++) lights.push({ x: cx, y: ri(3), rows: 1 + ri(45), transpose: rnd() < 0.5, flipH: rnd() < 0.5, flipV: rnd() < 0.5 });
+  // non-overlapping: place each block right of the previous one's extent
+  let blocks = layoutBlocks(sections, lights);
+  for (const b of blocks) { lights[b.dev].x = cx; cx += b.w + ri(2); }
+  blocks = layoutBlocks(sections, lights);
+  const grouped = sectionsGroupedByDev(sections);
+  const totalAll = totalSegments(grouped);
+  const { w, h } = canvasDims(blocks);
+  check(blocks.every((b: any, i: number) => i === 0 || b.dev > blocks[i - 1].dev), "blocks in light order");
+  let rt = true;
+  for (let lg = 0; lg < totalAll; lg++) { const c = logicalToCanvas(lg, blocks); if (!c || canvasToLogical(c.vx, c.vy, blocks, totalAll) !== lg) rt = false; }
+  check(rt, "logicalToCanvas ∘ canvasToLogical is identity on every logical index");
+  let cells = true;
+  for (let vy = 0; vy < h; vy++) for (let vx = 0; vx < w; vx++) {
+    const lg = canvasToLogical(vx, vy, blocks, totalAll);
+    if (lg === totalAll) continue;
+    const c = logicalToCanvas(lg, blocks);
+    if (!c || c.vx !== vx || c.vy !== vy) cells = false;
+  }
+  check(cells, "every covered canvas cell maps back to itself");
+  // 4-arg logicalToPhysical with uniform rows == 3-arg
+  const uni = lights.map((l) => Object.assign({}, l, { rows: lights[0].rows }));
+  let same = true;
+  for (let p = 0; p < totalAll; p++) if (logicalToPhysical(p, grouped, lights[0].rows, uni) !== logicalToPhysical(p, grouped, lights[0].rows)) same = false;
+  check(same, "logicalToPhysical 4-arg == 3-arg when rows uniform");
+}
+// legacy: one light at (0,0) equals the old global-orient grid for every cell
+for (let iter = 0; iter < 1000; iter++) {
+  const sections = [{ length: 1 + ri(45), reversed: false, serpentine: false }, { length: 1 + ri(45), reversed: false, serpentine: false }];
+  const rows = 1 + ri(45), o = { transpose: rnd() < 0.5, flipH: rnd() < 0.5, flipV: rnd() < 0.5 };
+  const total = totalSegments(sections), width = gridWidth(total, rows), d = gridDims(width, rows, o.transpose);
+  const blocks = layoutBlocks(sections, [Object.assign({ x: 0, y: 0, rows }, o)]);
+  const cd = canvasDims(blocks);
+  check(cd.w === d.w && cd.h === d.h, "single-light canvas equals legacy grid dims");
+  let eq = true;
+  for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
+    const legacy = visualToLogical(vx, vy, width, rows, o); const now = canvasToLogical(vx, vy, blocks, total);
+    if ((legacy < total ? legacy : total) !== now) eq = false;
+  }
+  check(eq, "single light at origin == legacy visualToLogical");
 }
 console.log(`layout tests: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

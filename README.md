@@ -63,7 +63,13 @@ git config core.hooksPath .githooks
 bun run dev
 ```
 
-Open **http://localhost:8787**, click **Connect device**, pick your light, and start painting. For more lights, click **+ Add light** in the Lights card, then **Connect** on the new row: the canvas grows by 88 cells (two 44-segment sections tagged with that light), and you calibrate those sections with Reverse / Snake exactly like the first light's. Each row connects and disconnects on its own; a drop on one never stalls the others. The **Light N** button on a section hands it to the next light. (`bun install` first if you want editor types; the app itself has no runtime dependencies.)
+Open **http://localhost:8787**, click **Connect device**, pick your light, and start painting. For more lights, click **+ Add light** in the Lights card, then **Connect** on the new row: the canvas grows by 88 cells (two 44-segment sections tagged with that light), and you calibrate those sections with Reverse / Snake exactly like the first light's. Each row connects and disconnects on its own; a drop on one never stalls the others. The **Light N** button on a section hands it to the next light.
+
+Placing and calibrating several lights is a feedback loop between the screen and the ceiling, not data entry. Each light is a block on the canvas with its own run length, orientation and position, and the **Calibrate** card works on one light at a time:
+
+- **Identify (flash)** turns that light solid white for a moment so you know which physical light you are editing.
+- **Walk segments** lights one segment at a time along that controller's wire while the matching cell lights on screen. If the ceiling dot and the screen dot move differently, hit **Reverse** / **Snake** on that light's sections or **Flip** / **Transpose** on the light until they agree.
+- **Place lights (drag)** turns the canvas into a layout: every light is a tinted, labelled block you drag to where it really hangs. Gaps between blocks are dead cells. The arrow buttons nudge the selected light one cell; the two number fields set its position exactly. (`bun install` first if you want editor types; the app itself has no runtime dependencies.)
 
 One Bun process serves the whole thing: the static frontend and the AI endpoint. The browser talks to the lights directly over Web Bluetooth, so the server is only in the loop for AI generation.
 
@@ -113,7 +119,7 @@ Planning consequence: live full-grid motion is inherently low-fps, and it gets w
 
 ## Roadmap
 
-- Map segment index → physical position; full 24×11 ceiling grid (any number of controllers, one canvas).
+- Map segment index → physical position. Done: any number of controllers on one canvas, each a placed block.
 - dir `0x13` is the DIY-scene render mode, and speed decides its behavior on-device: speed 0 holds the design dead still (**Static**), speed > 0 smoothly flows the dot colors into each other (**Gradient**). Both are exposed as effects; painted designs and live-animation frames always push at speed 0 so they stay put.
 - Scene playlists / a frame-by-frame animation editor.
 - Broader device support beyond the H703B.

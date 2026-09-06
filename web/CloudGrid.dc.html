@@ -438,12 +438,37 @@
       </div>
 
       <div style="{{ cardStyle }}">
-        <div style="display:flex; align-items:center; gap:6px;"><div style="{{ cardHead }}">Calibrate · orientation</div><span onMouseEnter="{{ tipOn.calibrate }}" onMouseLeave="{{ hideTip }}" style="{{ helpIcon }}">i</span></div>
+        <div style="display:flex; align-items:center; gap:6px;"><div style="{{ cardHead }}">{{ calibTitle }}</div><span onMouseEnter="{{ tipOn.calibrate }}" onMouseLeave="{{ hideTip }}" style="{{ helpIcon }}">i</span></div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <sc-for list="{{ calibLights }}" as="cl" hint-placeholder-count="1">
+            <button onClick="{{ cl.onPick }}" style="{{ cl.style }}">{{ cl.label }}</button>
+          </sc-for>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <button onClick="{{ identify }}" style="{{ nudgeBtn }}">Identify (flash)</button>
+          <button onClick="{{ walk }}" style="{{ walkBtn }}">{{ walkLabel }}</button>
+        </div>
         <div style="{{ sliderRow }}">
           <span style="{{ sliderLab }}">Run length</span>
           <input type="number" min="1" max="45" value="{{ rows }}" onChange="{{ onRows }}" style="{{ numInput }}" />
           <span style="font-size:11.5px; color:#6c7686;">LEDs / run</span>
         </div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <button onClick="{{ mTranspose }}" style="{{ transposeBtn }}">Transpose</button>
+          <button onClick="{{ mFlipH }}" style="{{ flipHBtn }}">Flip ↔</button>
+          <button onClick="{{ mFlipV }}" style="{{ flipVBtn }}">Flip ↕</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span style="{{ sliderLab }}">Position</span>
+          <input type="number" min="0" value="{{ lightX }}" onChange="{{ onLightX }}" style="{{ numInputSm }}" />
+          <input type="number" min="0" value="{{ lightY }}" onChange="{{ onLightY }}" style="{{ numInputSm }}" />
+          <button onClick="{{ nudgeL }}" style="{{ nudgeBtn }}">◀</button>
+          <button onClick="{{ nudgeU }}" style="{{ nudgeBtn }}">▲</button>
+          <button onClick="{{ nudgeD }}" style="{{ nudgeBtn }}">▼</button>
+          <button onClick="{{ nudgeR }}" style="{{ nudgeBtn }}">▶</button>
+        </div>
+        <button onClick="{{ toggleLayout }}" style="{{ layoutBtn }}">{{ layoutLabel }}</button>
+      </div>
         <div style="display:flex; flex-wrap:wrap; gap:6px;">
           <button onClick="{{ mTranspose }}" style="{{ transposeBtn }}">Transpose</button>
           <button onClick="{{ mFlipH }}" style="{{ flipHBtn }}">Flip ↔</button>
@@ -558,7 +583,7 @@ class Component extends DCLogic {
       connected: false, status: "Not connected", busy: false, powered: true,
       devs: [{ connected: false, name: "" }], // one entry per light; grows with addLight
       seededDevs: [], // slots that already got their starter sections (so deleting them sticks)
-      sections, rows: 11, transpose: false, flipH: false, flipV: false,
+      sections, lights: [this._defaultLight()], calibLight: 0, layoutMode: false, walkOn: false,
       colors: new Array(this.totalSegments(sections)).fill(null),
       bright: new Array(this.totalSegments(sections)).fill(100),
       previewColors: null,
@@ -593,7 +618,7 @@ class Component extends DCLogic {
       animate: "Streamed from the browser at the Frame rate set in the Device card; previews live on the grid and push per-light motion to the device. Breathe, Wave and Scroll animate your painted design.",
       media: "Load an image, GIF, or video. A still image samples once (use the fit and color sliders); a GIF or video loops live (Chrome/Edge only, capped at 240 frames).",
       ai: "Generates a pattern for the current grid. Needs an AI key in .env (ANTHROPIC_API_KEY or OPENAI_API_KEY); the key never reaches the browser.",
-      calibrate: "Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner. With several lights, each section's Light N button says which controller it is wired to; click it to hand the section to the next light.",
+      calibrate: "Pick a light. Identify flashes it so you know which one it is. Walk runs a single dot along its wire while the matching cell lights on screen: if the two dots move differently, hit Reverse / Snake on its sections or Flip / Transpose here until they match. Place lights (drag) lets you drag each light\'s block to where it really sits.",
     };
     // dir bytes confirmed from official-app btsnoop capture (2026-06-23).
     // dir 0x13 is the DIY-scene render mode; SPEED decides its behavior on the
@@ -665,7 +690,7 @@ class Component extends DCLogic {
       if (raw) {
         const p = JSON.parse(raw);
         const patch = {};
-        ["sections", "rows", "transpose", "flipH", "flipV", "seededDevs", "selected", "gradColor", "recent", "paletteOn", "palette", "brightness", "effectId", "speed", "fps", "scenes"].forEach((k) => {
+        ["sections", "lights", "seededDevs", "selected", "gradColor", "recent", "paletteOn", "palette", "brightness", "effectId", "speed", "fps", "scenes"].forEach((k) => {
           if (p[k] != null) patch[k] = p[k];
         });
         // Layouts saved before multi-light have no `dev`: they belong to Light 1.
@@ -675,6 +700,16 @@ class Component extends DCLogic {
         const n = Math.max(1, p.lightCount || 1, maxDev + 1);
         patch.devs = Array.from({ length: n }, () => ({ connected: false, name: "" }));
         this.devices = new Array(n).fill(null);
+        // Per-light layout. A layout saved before blocks had one global run
+        // length + orientation: that becomes Light 1's, and any further lights
+        // copy it and line up side by side, which is how they were drawn before.
+        const legacy = { rows: p.rows != null ? p.rows : 11, transpose: !!p.transpose, flipH: !!p.flipH, flipV: !!p.flipV };
+        let lights = Array.isArray(p.lights) ? p.lights.map((l) => Object.assign(this._defaultLight(), l)) : [];
+        while (lights.length < n) lights.push(Object.assign(this._defaultLight(), lights.length ? lights[lights.length - 1] : legacy, { x: 0, y: 0 }));
+        lights = lights.slice(0, n);
+        if (!Array.isArray(p.lights)) lights = this._placeSideBySide(lights, patch.sections || this.state.sections);
+        patch.lights = lights;
+        patch.sections = window.CG.sectionsGroupedByDev(patch.sections || this.state.sections);
         // Migrate an older auto-learned scene-interval cap (ms) to a manual fps.
         if (patch.fps == null && p.minSceneMs) patch.fps = Math.min(this.MAX_FPS, Math.max(this.MIN_FPS, Math.round((1000 / p.minSceneMs) * 2) / 2));
         // Migrate an older stored `effect` (raw dir byte) to an effect id, and
@@ -688,7 +723,7 @@ class Component extends DCLogic {
         this.setState(patch);
       }
     } catch (e) {}
-    this._up = () => { if (this.painting === "shape") { this.endDrag(); } else if (this.painting) { this.painting = false; this.push(); } };
+    this._up = () => { if (this.grab) { this.layoutUp(); } else if (this.painting === "shape") { this.endDrag(); } else if (this.painting) { this.painting = false; this.push(); } };
     window.addEventListener("pointerup", this._up);
     this._keydown = (e) => {
       const tag = e.target && e.target.tagName;
@@ -745,7 +780,7 @@ class Component extends DCLogic {
     try {
       const s = this.state;
       localStorage.setItem("cloudgrid", JSON.stringify({
-        sections: s.sections, rows: s.rows, transpose: s.transpose, flipH: s.flipH, flipV: s.flipV, seededDevs: s.seededDevs, lightCount: s.devs.length,
+        sections: s.sections, lights: s.lights, seededDevs: s.seededDevs, lightCount: s.devs.length,
         selected: s.selected, gradColor: s.gradColor, recent: s.recent, paletteOn: s.paletteOn, palette: s.palette, brightness: s.brightness, effectId: s.effectId, speed: s.speed, fps: s.fps, scenes: s.scenes,
       }));
     } catch (e) {}
@@ -764,9 +799,14 @@ class Component extends DCLogic {
   totalSegments(sections) { return window.CG.totalSegments(sections); }
   gridWidth(total, rows) { return window.CG.gridWidth(total, rows); }
   gridDims(width, rows, transpose) { return window.CG.gridDims(width, rows, transpose); }
-  visualToLogical(vx, vy, width, rows, o) { return window.CG.visualToLogical(vx, vy, width, rows, o); }
+  // Canvas cell → global logical index, or `total` when no segment lives there.
+  // Pass `blocks` from dims() in loops; otherwise it is computed per call.
+  visualToLogical(vx, vy, blocks) {
+    const bl = Array.isArray(blocks) ? blocks : this._blocks();
+    return window.CG.canvasToLogical(vx, vy, bl, this.totalSegments(this.state.sections));
+  }
   localPhysical(p, s, rows) { return window.CG.localPhysical(p, s, rows); }
-  logicalToPhysical(p, sections, rows) { return window.CG.logicalToPhysical(p, sections, rows); }
+  logicalToPhysical(p, sections, rows) { return window.CG.logicalToPhysical(p, sections, rows, this.state.lights); }
   sectionOfLogical(p, sections) { return window.CG.sectionOfLogical(p, sections); }
   hexToRgb(hex) { return window.CG.hexToRgb(hex); }
   hslHex(h, s, l) { return window.CG.hslHex(h, s, l); }
@@ -809,12 +849,31 @@ class Component extends DCLogic {
   }
   hideTip() { if (this.state.tip) this.setState({ tip: null }); }
 
-  orient() { return { transpose: this.state.transpose, flipH: this.state.flipH, flipV: this.state.flipV }; }
+  _defaultLight() { return { x: 0, y: 0, rows: 11, transpose: false, flipH: false, flipV: false }; }
+  // Lay lights out left to right in light order, touching. Used for migration
+  // and for placing a light that has never been positioned.
+  _placeSideBySide(lights, sections) {
+    const blocks = window.CG.layoutBlocks(sections, lights);
+    let cx = 0;
+    return lights.map((l, i) => { const b = blocks.find((bb) => bb.dev === i); const nl = Object.assign({}, l, { x: cx, y: 0 }); cx += b ? b.w : 0; return nl; });
+  }
+  // One block per light on the shared canvas (see CG.layoutBlocks). The canvas
+  // is their bounding box; in Layout mode it gets 2 cells of slack on the right
+  // and bottom so a block can be dragged outward.
+  _blocks() { return window.CG.layoutBlocks(this.state.sections, this.state.lights); }
   dims() {
     const total = this.totalSegments(this.state.sections);
-    const width = this.gridWidth(total, this.state.rows);
-    const d = this.gridDims(width, this.state.rows, this.state.transpose);
-    return { total, width, w: d.w, h: d.h };
+    const blocks = this._blocks();
+    const c = window.CG.canvasDims(blocks);
+    const pad = this.state.layoutMode ? 2 : 0;
+    // While a block is being dragged the canvas keeps the size it had at grab
+    // time. If it resized mid-drag the grid would re-centre and shrink its
+    // cells, the pointer would land on a different cell, and the block would
+    // chase the pointer. Release and drag again to go further; the 2-cell slack
+    // is renewed on every grab.
+    const f = this.grab && this.grab.frozen;
+    const w = f ? f.w : c.w + pad, h = f ? f.h : c.h + pad;
+    return { total, blocks, width: w, w, h };
   }
 
   // ---------- device / push ----------
@@ -874,7 +933,7 @@ class Component extends DCLogic {
       const s = scale * cb;
       let r = Math.round(r0 * s), g = Math.round(g0 * s), b = Math.round(b0 * s);
       if (quant) { r = Math.min(255, Math.round(r / quant) * quant); g = Math.min(255, Math.round(g / quant) * quant); b = Math.min(255, Math.round(b / quant) * quant); }
-      phys[this.logicalToPhysical(p, this.state.sections, this.state.rows)] = [r, g, b];
+      phys[this.logicalToPhysical(p, this.state.sections, 11)] = [r, g, b];
     });
     // One scene per light (CG.splitScenes): the flat physical run is split by
     // which controller owns each segment; each light picks its OWN background
@@ -928,7 +987,7 @@ class Component extends DCLogic {
   // logicalIndex, so a decoded per-physical-segment scene maps back to canvas cells.
   _physToLogical(total) {
     const inv = new Array(total).fill(null);
-    for (let p = 0; p < total; p++) inv[this.logicalToPhysical(p, this.state.sections, this.state.rows)] = p;
+    for (let p = 0; p < total; p++) inv[this.logicalToPhysical(p, this.state.sections, 11)] = p;
     return inv;
   }
   _rgbHex(rgb) {
@@ -952,6 +1011,7 @@ class Component extends DCLogic {
   }
   async push() {
     this.stopScenePreview();
+    if (this.walking != null) { this.walking = null; this.setState({ walkOn: false }); }
     if (this.animRunning) { this.animRunning = false; this.playbackFrames = null; this.setState({ animationId: null, previewColors: null }); }
     if (!this.anyConnected()) return;
     if (this.pushing) { this.pendingPush = true; return; }
@@ -1036,7 +1096,13 @@ class Component extends DCLogic {
   // `dev`, the Lights card shows one row each, and there is no upper bound.
   addLight() {
     this.devices.push(null);
-    this.setState({ devs: this.state.devs.concat([{ connected: false, name: "" }]), status: "Light " + this.devices.length + " added; click its Connect" }, this._persist);
+    // New light copies the last one's run length and orientation and sits to
+    // the right of everything, so it shows up where you'd expect and calibrates
+    // from a sensible start.
+    const last = this.state.lights[this.state.lights.length - 1] || this._defaultLight();
+    const c = window.CG.canvasDims(this._blocks());
+    const light = Object.assign({}, last, { x: c.w, y: 0 });
+    this.setState({ devs: this.state.devs.concat([{ connected: false, name: "" }]), lights: this.state.lights.concat([light]), calibLight: this.state.lights.length, status: "Light " + this.devices.length + " added; click its Connect" }, this._persist);
   }
   // Drop a light: disconnect it, delete the sections it owns (the canvas
   // shrinks), and renumber the lights above it so `dev` stays an index.
@@ -1046,7 +1112,7 @@ class Component extends DCLogic {
     if (dev) dev.disconnect();
     this.devices.splice(slot, 1);
     const devs = this.state.devs.filter((_, i) => i !== slot);
-    this.setState({ devs, connected: devs.some((d) => d.connected), seededDevs: this.state.seededDevs.filter((x) => x !== slot).map((x) => (x > slot ? x - 1 : x)), status: "Light " + (slot + 1) + " removed" });
+    this.setState({ devs, lights: this.state.lights.filter((_, i) => i !== slot), calibLight: Math.min(this.state.calibLight, devs.length - 1), connected: devs.some((d) => d.connected), seededDevs: this.state.seededDevs.filter((x) => x !== slot).map((x) => (x > slot ? x - 1 : x)), status: "Light " + (slot + 1) + " removed" });
     this.setSections(this.state.sections.filter((sec) => (sec.dev || 0) !== slot).map((sec) => ((sec.dev || 0) > slot ? Object.assign({}, sec, { dev: sec.dev - 1 }) : sec)));
   }
   // A light that owns no sections has nothing to show. First time a slot
@@ -1056,6 +1122,8 @@ class Component extends DCLogic {
     if (slot === 0 || this.state.seededDevs.indexOf(slot) >= 0) return;
     if (this.state.sections.some((sec) => (sec.dev || 0) === slot)) return;
     this.setState({ seededDevs: this.state.seededDevs.concat([slot]) });
+    const c = window.CG.canvasDims(this._blocks());
+    this.setLight(slot, { x: c.w, y: 0 }, true);
     this.setSections(this.state.sections.concat([
       { length: 44, reversed: false, serpentine: false, dev: slot },
       { length: 44, reversed: false, serpentine: false, dev: slot },
@@ -1118,6 +1186,7 @@ class Component extends DCLogic {
   selectEraser() { this.selectTool("eraser"); }
   setBrushSize(n) { this.setState({ brushSize: Math.max(1, Math.min(8, Math.round(n) || 1)) }); }
   setSections(sections) {
+    sections = window.CG.sectionsGroupedByDev(sections);
     const total = this.totalSegments(sections);
     const colors = Array.from({ length: total }, (_, i) => this.state.colors[i] != null ? this.state.colors[i] : null);
     const bright = Array.from({ length: total }, (_, i) => this.state.bright[i] != null ? this.state.bright[i] : 100);
@@ -1125,7 +1194,88 @@ class Component extends DCLogic {
     // size, so re-push so the device matches the editor (like reverse/snake).
     this.setState({ sections, colors, bright }, () => { this._persist(); this.push(); });
   }
-  setRows(n) { this.setState({ rows: Math.max(1, Math.min(45, n || 1)) }, () => { this._persist(); this.push(); }); }
+  // Calibration edits apply to the light picked in the Calibrate card.
+  setLight(dev, patch, quiet) {
+    const lights = this.state.lights.map((l, i) => (i === dev ? Object.assign({}, l, patch) : l));
+    this.setState({ lights }, quiet ? this._persistSoon : () => { this._persist(); this.push(); });
+  }
+  calibLight() { return this.state.lights[this.state.calibLight] || this.state.lights[0]; }
+  setRows(n) { this.setLight(this.state.calibLight, { rows: Math.max(1, Math.min(45, n || 1)) }); }
+  setLightPos(dev, x, y) { this.setLight(dev, { x: Math.max(0, Math.round(x) || 0), y: Math.max(0, Math.round(y) || 0) }); }
+  nudgeLight(dx, dy) { const l = this.calibLight(); this.setLightPos(this.state.calibLight, l.x + dx, l.y + dy); }
+  toggleLayoutMode() { this.grab = null; this.setState({ layoutMode: !this.state.layoutMode, tool: "brush", erasing: false, dragCells: null, selection: null }); }
+  // Layout mode drag: grab a block by the cell under the pointer, keep that
+  // grab offset, and move the block as the pointer enters other cells. The
+  // canvas can grow while dragging (it is the blocks' bounding box), which is
+  // fine: each move is absolute from the entered cell, not a delta.
+  layoutDown(vx, vy) {
+    const b = window.CG.blockAt(vx, vy, this._blocks());
+    if (!b) return;
+    const c = window.CG.canvasDims(this._blocks());
+    this.grab = { dev: b.dev, dx: vx - b.x, dy: vy - b.y, w: b.w, h: b.h, frozen: { w: c.w + 2, h: c.h + 2 } };
+    this.setState({ calibLight: b.dev });
+  }
+  layoutEnter(vx, vy) {
+    if (!this.grab) return;
+    const l = this.state.lights[this.grab.dev];
+    const g = this.grab;
+    const nx = Math.max(0, Math.min(g.frozen.w - g.w, vx - g.dx)), ny = Math.max(0, Math.min(g.frozen.h - g.h, vy - g.dy));
+    if (l && (nx !== l.x || ny !== l.y)) this.setLight(this.grab.dev, { x: nx, y: ny }, true);
+  }
+  layoutUp() { if (!this.grab) return; this.grab = null; this._persist(); this.push(); }
+  // Flash one light solid white on its own link so you can see which physical
+  // light it is, then put the design back.
+  async identify(dev) {
+    const d = this.devices[dev];
+    if (!d || !d.connected) { this.setState({ status: "Connect Light " + (dev + 1) + " first" }); return; }
+    this.stopMotion();
+    const total = this.totalSegments(this.state.sections);
+    const b = this._blocks().find((x) => x.dev === dev);
+    const preview = new Array(total).fill(null);
+    if (b) for (let i = 0; i < b.total; i++) preview[b.offset + i] = "#ffffff";
+    this.setState({ previewColors: preview, status: "Identifying Light " + (dev + 1) + "…" });
+    try { await this.queueScene(() => d.setScene([], { dir: 0x13, speed: 0, bg: [255, 255, 255] })); } catch (e) {}
+    await new Promise((r) => setTimeout(r, 1500));
+    this.push();
+  }
+  // Walk: light one physical segment at a time on ONE controller, in wire
+  // order, while the canvas cell that segment is calibrated to lights up. If
+  // the calibration is right, the dot on the ceiling and the dot on screen
+  // move the same way; if not, the mismatch shows you which toggle to flip.
+  // Each step waits for its BLE write to drain before the next, so the ceiling
+  // never lags the screen.
+  toggleWalk(dev) { if (this.walking != null) { this.stopWalk(); return; } this.startWalk(dev); }
+  stopWalk() { if (this.walking == null) return; this.walking = null; this.setState({ walkOn: false, previewColors: null, status: "Walk stopped" }); this.push(); }
+  stopMotion() {
+    if (this.animRunning) this.stopAnimation();
+    this.walking = null;
+    this.stopEffectPreview(); this.stopScenePreview();
+    this.sceneGen++;
+    this.setState({ walkOn: false, previewColors: null });
+  }
+  async startWalk(dev) {
+    this.stopMotion();
+    const sections = this.state.sections, total = this.totalSegments(sections);
+    const layout = window.CG.deviceLayout(sections);
+    const inv = this._physToLogical(total);
+    const gOf = [];
+    layout.owner.forEach((o, g) => { if (o.dev === dev) gOf[o.idx] = g; });
+    const n = layout.totals[dev] || 0;
+    if (!n) { this.setState({ status: "Light " + (dev + 1) + " has no sections to walk" }); return; }
+    const device = this.devices[dev], live = !!(device && device.connected);
+    this.walking = dev;
+    this.setState({ walkOn: true, calibLight: dev });
+    for (let k = 0; this.walking === dev; k = (k + 1) % n) {
+      const preview = new Array(total).fill(null);
+      const lg = inv[gOf[k]];
+      if (lg != null) preview[lg] = "#ffffff";
+      this.setState({ previewColors: preview, status: "Walking Light " + (dev + 1) + " · segment " + (k + 1) + " of " + n + (live ? "" : " (preview only, not connected)") });
+      const t0 = Date.now();
+      if (live) { try { await this.queueScene(() => device.setScene([{ seg: k, r: 255, g: 255, b: 255 }], { dir: 0x13, speed: 0, bg: [1, 1, 1] })); } catch (e) {} }
+      const gap = Math.max(this.HARD_MIN_GAP_MS, this.sceneIntervalMs() - (Date.now() - t0));
+      await new Promise((r) => setTimeout(r, gap));
+    }
+  }
   setBrightness(n) { this.setState({ brightness: Math.max(0, Math.min(100, Math.round(n))) }, () => { this._persist(); if (!this.animRunning) this.push(); }); }
   setBrushBright(n) { this.setState({ brushBright: Math.max(0, Math.min(100, Math.round(n))) }); }
   setCellBright(logical, v) { const bright = this.state.bright.slice(); bright[logical] = Math.max(0, Math.min(100, v)); this.setState({ bright }); }
@@ -1166,9 +1316,9 @@ class Component extends DCLogic {
   setSpeed(n) { this.setState({ speed: Math.max(1, Math.min(100, Math.round(n))) }, () => { this._persist(); if (!this.animRunning) this.push(); }); }
   // Orientation toggles re-map the editor view; push too so the device stays in
   // sync with what's on screen (matches reverse/snake/run-length behavior).
-  toggleTranspose() { this.setState({ transpose: !this.state.transpose }, () => { this._persist(); this.push(); }); }
-  toggleFlipH() { this.setState({ flipH: !this.state.flipH }, () => { this._persist(); this.push(); }); }
-  toggleFlipV() { this.setState({ flipV: !this.state.flipV }, () => { this._persist(); this.push(); }); }
+  toggleTranspose() { const l = this.calibLight(); this.setLight(this.state.calibLight, { transpose: !l.transpose }); }
+  toggleFlipH() { const l = this.calibLight(); this.setLight(this.state.calibLight, { flipH: !l.flipH }); }
+  toggleFlipV() { const l = this.calibLight(); this.setLight(this.state.calibLight, { flipV: !l.flipV }); }
 
   // H703B hardware limits: 45 LEDs per strand, 2 strands per controller = 90
   // segments max. One CloudGrid instance drives one controller; 3 controllers =
@@ -1192,13 +1342,13 @@ class Component extends DCLogic {
 
   // Paint a brushSize×brushSize block centered on visual cell (vx,vy).
   paintCells(vx, vy) {
-    const d = this.dims(), orient = this.orient();
+    const d = this.dims();
     const r = Math.floor((this.state.brushSize - 1) / 2);
     const colors = this.state.colors.slice(), bright = this.state.bright.slice();
     const erasing = this.state.tool === "eraser";
     for (let yy = vy - r; yy <= vy + r; yy++) for (let xx = vx - r; xx <= vx + r; xx++) {
       if (xx < 0 || yy < 0 || xx >= d.w || yy >= d.h) continue;
-      const lg = this.visualToLogical(xx, yy, d.width, this.state.rows, orient);
+      const lg = this.visualToLogical(xx, yy, d.blocks);
       if (lg >= d.total) continue;
       if (erasing) colors[lg] = null;
       else { colors[lg] = this.state.selected; bright[lg] = this.state.brushBright; }
@@ -1208,8 +1358,8 @@ class Component extends DCLogic {
   }
   // Flood-fill the contiguous region of same-color cells reachable from (vx,vy).
   bucketFill(vx, vy) {
-    const d = this.dims(), orient = this.orient();
-    const at = (x, y) => { const lg = this.visualToLogical(x, y, d.width, this.state.rows, orient); return lg < d.total ? lg : -1; };
+    const d = this.dims();
+    const at = (x, y) => { const lg = this.visualToLogical(x, y, d.blocks); return lg < d.total ? lg : -1; };
     const start = at(vx, vy); if (start < 0) return;
     const target = this.state.colors[start] || null;
     const repl = this.state.selected;
@@ -1245,14 +1395,14 @@ class Component extends DCLogic {
   beginShape(vx, vy) { this.dragStart = { vx, vy }; this.painting = "shape"; this.updateDrag(vx, vy); }
   updateDrag(vx, vy) {
     const a = this.dragStart; if (!a) return;
-    const t = this.state.tool, d = this.dims(), orient = this.orient();
+    const t = this.state.tool, d = this.dims();
     let pts = [];
     if (t === "select") {
       const x0 = Math.min(a.vx, vx), x1 = Math.max(a.vx, vx), y0 = Math.min(a.vy, vy), y1 = Math.max(a.vy, vy);
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) pts.push({ vx: x, vy: y });
     } else pts = this.shapeCells(a, { vx, vy }, t);
     const logicals = [];
-    for (const p of pts) { const lg = this.visualToLogical(p.vx, p.vy, d.width, this.state.rows, orient); if (lg < d.total) logicals.push(lg); }
+    for (const p of pts) { const lg = this.visualToLogical(p.vx, p.vy, d.blocks); if (lg < d.total) logicals.push(lg); }
     this.setState({ dragCells: logicals });
   }
   endDrag() {
@@ -1289,13 +1439,11 @@ class Component extends DCLogic {
   fillAll() { this.snapshot(); const total = this.totalSegments(this.state.sections); this.setState({ colors: new Array(total).fill(this.state.selected), bright: new Array(total).fill(this.state.brushBright) }, () => this.push()); this.useColor(this.state.selected); }
 
   buildPattern(fn) {
-    const { sections, rows, transpose, flipH, flipV, selected, gradColor } = this.state;
-    const total = this.totalSegments(sections);
-    const width = this.gridWidth(total, rows);
-    const d = this.gridDims(width, rows, transpose);
+    const { selected, gradColor } = this.state;
+    const d = this.dims(), total = d.total;
     const colors = new Array(total).fill(null);
     for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
-      const logical = this.visualToLogical(vx, vy, width, rows, { transpose, flipH, flipV });
+      const logical = this.visualToLogical(vx, vy, d.blocks);
       if (logical >= total) continue;
       colors[logical] = fn(vx, vy, d.w, d.h, selected, gradColor);
     }
@@ -1322,16 +1470,13 @@ class Component extends DCLogic {
   computeAnimColors(animId, frame) {
     const anim = animId === "__calib__" ? this._calibAnim() : this.ANIMATIONS.find((a) => a.id === animId);
     if (!anim) return null;
-    const { sections, rows, transpose, flipH, flipV, selected, colors } = this.state;
-    const total = this.totalSegments(sections);
-    const width = this.gridWidth(total, rows);
-    const d = this.gridDims(width, rows, transpose);
-    const orient = { transpose, flipH, flipV };
-    const designAt = (vx, vy) => colors[this.visualToLogical(vx, vy, width, rows, orient)] || null;
+    const { selected, colors } = this.state;
+    const d = this.dims(), total = d.total;
+    const designAt = (vx, vy) => colors[this.visualToLogical(vx, vy, d.blocks)] || null;
     const ctx = { w: d.w, h: d.h, frame, selected, designAt };
     const out = new Array(total).fill(null);
     for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
-      const logical = this.visualToLogical(vx, vy, width, rows, orient);
+      const logical = this.visualToLogical(vx, vy, d.blocks);
       if (logical >= total) continue;
       out[logical] = anim.fn(vx, vy, ctx);
     }
@@ -1398,13 +1543,10 @@ class Component extends DCLogic {
   }
   // Build a logical color array from a visual-coords fn (for the test patterns).
   _testGrid(fn) {
-    const { sections, rows, transpose, flipH, flipV } = this.state;
-    const total = this.totalSegments(sections);
-    const width = this.gridWidth(total, rows);
-    const d = this.gridDims(width, rows, transpose);
+    const d = this.dims(), total = d.total;
     const out = new Array(total).fill(null);
     for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
-      const logical = this.visualToLogical(vx, vy, width, rows, { transpose, flipH, flipV });
+      const logical = this.visualToLogical(vx, vy, d.blocks);
       if (logical >= total) continue;
       out[logical] = fn(vx, vy, d.w, d.h) || null;
     }
@@ -1446,6 +1588,7 @@ class Component extends DCLogic {
     catch (e) { this.setState({ status: "Scene failed: " + e.message }); }
   }
   startAnimation(id) {
+    if (this.walking != null) { this.walking = null; this.setState({ walkOn: false }); }
     this.stopEffectPreview();
     this.stopScenePreview();
     this.playbackFrames = null;
@@ -1653,7 +1796,7 @@ class Component extends DCLogic {
     return Object.assign({
       fit: this.state.fit, rotate: this.state.rotate,
       adjust: { sat: this.state.imgSat, bright: this.state.imgBright, contrast: this.state.imgContrast },
-      dims: { w: d.w, h: d.h, total: d.total, width: d.width, rows: this.state.rows, orient: this.orient(), visualToLogical: this.visualToLogical.bind(this) },
+      dims: { w: d.w, h: d.h, total: d.total, width: d.width, rows: 11, orient: {}, visualToLogical: (vx, vy) => this.visualToLogical(vx, vy, d.blocks) },
     }, extra || {});
   }
   resampleImage(over) {
@@ -1732,7 +1875,7 @@ class Component extends DCLogic {
     const d = this.dims();
     const colors = new Array(d.total).fill(null);
     for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
-      const logical = this.visualToLogical(vx, vy, d.width, this.state.rows, this.orient());
+      const logical = this.visualToLogical(vx, vy, d.blocks);
       if (logical >= d.total) continue;
       colors[logical] = (grid && grid[vy] && grid[vy][vx]) || null;
     }
@@ -1888,10 +2031,12 @@ class Component extends DCLogic {
     const dragSet = st.dragCells ? new Set(st.dragCells) : null;
     const selSet = st.selection ? new Set(st.selection) : null;
     const dragGhost = st.tool === "select" ? "rgba(52,207,107,0.28)" : st.selected;
+    const LIGHT_TINTS = ["#34cf6b", "#3b82f6", "#f59e0b", "#ec4899", "#a855f7", "#14b8a6"];
+    const cl = st.lights[st.calibLight] || st.lights[0] || this._defaultLight();
     const cells = [];
     for (let k = 0; k < d.w * d.h; k++) {
       const vy = Math.floor(k / d.w), vx = k % d.w;
-      const logical = this.visualToLogical(vx, vy, d.width, this.state.rows, this.orient());
+      const logical = this.visualToLogical(vx, vy, d.blocks);
       const exists = logical < d.total;
       const c = exists ? src[logical] : null;
       // Show per-cell + master brightness on the STATIC canvas. Any preview
@@ -1901,15 +2046,20 @@ class Component extends DCLogic {
       const t = st.previewColors ? 1 : (st.brightness / 100) * cb;
       const shown = c && t < 1 ? this.dimHex(c, t) : c;
       const banded = exists && (this.sectionOfLogical(logical, st.sections) % 2 === 1);
+      const blk = st.layoutMode ? window.CG.blockAt(vx, vy, d.blocks) : null;
+      const tint = blk ? LIGHT_TINTS[blk.dev % LIGHT_TINTS.length] : null;
       let style;
-      if (!exists) style = { width: "100%", height: "100%", borderRadius: rad, background: "transparent", border: "1px solid transparent", cursor: "default" };
+      if (!exists && st.layoutMode) style = { width: "100%", height: "100%", borderRadius: rad, background: blk ? "rgba(255,255,255,0.03)" : "transparent", border: "1px dashed " + (blk ? tint : "#1b212a"), cursor: blk ? "grab" : "default" };
+      else if (!exists) style = { width: "100%", height: "100%", borderRadius: rad, background: "transparent", border: "1px solid transparent", cursor: "default" };
       else if (c) style = { width: "100%", height: "100%", borderRadius: rad, background: shown, border: "1px solid rgba(0,0,0,0.5)", cursor: "crosshair", display: "flex", alignItems: "center", justifyContent: "center" };
       else style = { width: "100%", height: "100%", borderRadius: rad, background: banded ? "#13171e" : "#0f141a", border: "1px solid #1b212a", boxShadow: banded ? "inset 0 0 0 9999px rgba(52,207,107,0.045)" : "none", cursor: "crosshair", display: "flex", alignItems: "center", justifyContent: "center" };
+      if (blk && exists) style = Object.assign({}, style, { boxShadow: "inset 0 0 0 1px " + tint, cursor: "grab" });
       if (exists && dragSet && dragSet.has(logical)) style = Object.assign({}, style, { background: dragGhost, boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)" });
       else if (exists && selSet && selSet.has(logical)) style = Object.assign({}, style, { boxShadow: "inset 0 0 0 2px rgba(52,207,107,0.85)" });
+      const corner = blk && blk.x === vx && blk.y === vy;
       cells.push({
-        idx: logical, showIdx: exists && st.showIndices, style,
-        onDown: exists ? ((e) => {
+        idx: corner ? "L" + (blk.dev + 1) : logical, showIdx: corner || (exists && st.showIndices), style,
+        onDown: st.layoutMode ? ((e) => { if (e.button === 2) return; e.preventDefault(); this.layoutDown(vx, vy); }) : exists ? ((e) => {
           if (e.button === 2) return; e.preventDefault();
           const tool = this.state.tool;
           if (tool === "bucket") { this.snapshot(); this.bucketFill(vx, vy); this.push(); }
@@ -1917,7 +2067,7 @@ class Component extends DCLogic {
           else if (tool === "line" || tool === "rect" || tool === "select") { this.beginShape(vx, vy); }
           else { this.snapshot(); this.painting = true; this.paintCells(vx, vy); }
         }) : (() => {}),
-        onEnter: exists ? (() => {
+        onEnter: st.layoutMode ? (() => this.layoutEnter(vx, vy)) : exists ? (() => {
           if (this.painting === "shape") this.updateDrag(vx, vy);
           else if (this.painting === true) this.paintCells(vx, vy);
         }) : (() => {}),
@@ -1997,7 +2147,7 @@ class Component extends DCLogic {
       mEraser: () => { this.setErasing(!st.erasing); this.closeMenus(); },
       mPalette: () => { this.setState({ paletteModal: true, openMenu: null }); },
       paletteModalOpen: st.paletteModal, closePaletteModal: () => this.setState({ paletteModal: false }), stopProp: (e) => e.stopPropagation(),
-      erMark: checkMark(st.erasing), ixMark: checkMark(st.showIndices), tpMark: checkMark(st.transpose), fhMark: checkMark(st.flipH), fvMark: checkMark(st.flipV),
+      erMark: checkMark(st.erasing), ixMark: checkMark(st.showIndices), tpMark: checkMark(cl.transpose), fhMark: checkMark(cl.flipH), fvMark: checkMark(cl.flipV),
       dbgMark: checkMark(st.debug), mDebug: () => this.toggleDebug(),
       mIndices: () => this.toggleIndices(), mTranspose: () => { this.toggleTranspose(); this.closeMenus(); }, mFlipH: () => { this.toggleFlipH(); this.closeMenus(); }, mFlipV: () => { this.toggleFlipV(); this.closeMenus(); },
       // collapsible sections
@@ -2106,8 +2256,17 @@ class Component extends DCLogic {
       onImportScenes: async (e) => { const f = e.target.files && e.target.files[0]; if (f) this.importScenes(await f.text()); e.target.value = ""; },
       chipBtn, chipBtnX,
       // calibrate
-      rows: st.rows, onRows: (e) => this.setRows(Number(e.target.value)),
-      transposeBtn: this._btn(st.transpose), flipHBtn: this._btn(st.flipH), flipVBtn: this._btn(st.flipV),
+      rows: cl.rows, onRows: (e) => this.setRows(Number(e.target.value)),
+      transposeBtn: this._btn(cl.transpose), flipHBtn: this._btn(cl.flipH), flipVBtn: this._btn(cl.flipV),
+      calibLights: st.lights.map((l, i) => ({ label: "Light " + (i + 1), style: Object.assign({}, this._btn(i === st.calibLight, { fs: "11.5px", pad: "5px 9px" }), i === st.calibLight ? { borderColor: LIGHT_TINTS[i % LIGHT_TINTS.length] } : {}), onPick: () => this.setState({ calibLight: i }) })),
+      calibTitle: "Calibrate · Light " + (st.calibLight + 1),
+      lightX: cl.x, lightY: cl.y,
+      onLightX: (e) => this.setLightPos(st.calibLight, Number(e.target.value), cl.y), onLightY: (e) => this.setLightPos(st.calibLight, cl.x, Number(e.target.value)),
+      nudgeL: () => this.nudgeLight(-1, 0), nudgeR: () => this.nudgeLight(1, 0), nudgeU: () => this.nudgeLight(0, -1), nudgeD: () => this.nudgeLight(0, 1),
+      layoutBtn: this._btn(st.layoutMode), toggleLayout: () => this.toggleLayoutMode(), layoutLabel: st.layoutMode ? "Done placing" : "Place lights (drag)",
+      identify: () => this.identify(st.calibLight), walk: () => this.toggleWalk(st.calibLight),
+      walkBtn: this._btn(st.walkOn), walkLabel: st.walkOn ? "Stop walk" : "Walk segments",
+      nudgeBtn: this._btn(false, { fs: "12px", pad: "5px 9px" }),
       addSection: () => this.addSection(), addBtn: this._btn(false, { fs: "11.5px", pad: "5px 9px" }),
       sections: st.sections.map((s, i) => ({ num: i + 1, length: s.length, canRemove: st.sections.length > 1, revStyle: this._btn(s.reversed, { fs: "11.5px", pad: "5px 9px" }), snakeStyle: this._btn(s.serpentine, { fs: "11.5px", pad: "5px 9px" }), onLen: (e) => this.setSectionLength(i, Number(e.target.value)), devLabel: "Light " + ((s.dev || 0) + 1), devStyle: this._btn((s.dev || 0) > 0, { fs: "11.5px", pad: "5px 9px" }), onDev: () => this.toggleSectionDev(i), onReverse: () => this.toggleReverse(i), onSnake: () => this.toggleSerpentine(i), onRemove: () => this.removeSection(i) })),
       // canvas

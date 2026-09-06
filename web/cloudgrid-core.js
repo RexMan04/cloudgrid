@@ -534,10 +534,16 @@
     if (s.reversed) p = s.length - 1 - p;
     return p;
   }
-  function logicalToPhysical(p, sections, rows) {
+  // `lights` (optional): per-light layout; when given, a section's serpentine run
+  // length is its own light's `rows`, so lights can have different run lengths.
+  // Without it the behaviour is the original single-`rows` one.
+  function logicalToPhysical(p, sections, rows, lights) {
     let offset = 0;
     for (const s of sections) {
-      if (p < offset + s.length) return offset + localPhysical(p - offset, s, rows);
+      if (p < offset + s.length) {
+        const l = lights && lights[s.dev || 0];
+        return offset + localPhysical(p - offset, s, l && l.rows ? l.rows : rows);
+      }
       offset += s.length;
     }
     return p;
@@ -564,6 +570,69 @@
     const devs = Object.keys(totals).map(Number).sort((a, b) => a - b);
     return { owner, totals, devs };
   }
+  // ---- light blocks: where each controller sits on the shared canvas ----------
+  // A light is a rectangular block. Its own logical run (its sections, which the
+  // caller keeps grouped by light in array order) wraps into a local grid by its
+  // own run length and orientation, exactly as the whole canvas used to; the
+  // block is then placed at (x, y). The canvas is the bounding box of all blocks
+  // and any cell outside every block is "no segment".
+  const DEFAULT_LIGHT = { x: 0, y: 0, rows: 11, transpose: false, flipH: false, flipV: false };
+  function lightOf(lights, dev) { return Object.assign({}, DEFAULT_LIGHT, (lights && lights[dev]) || {}); }
+  // Stable regroup so every light's sections are contiguous, in light order.
+  function sectionsGroupedByDev(sections) {
+    return sections.map((s, i) => ({ s, i })).sort((a, b) => ((a.s.dev || 0) - (b.s.dev || 0)) || (a.i - b.i)).map((x) => x.s);
+  }
+  // One block per light that owns at least one segment, in light order:
+  // { dev, x, y, w, h, width, rows, orient, offset, total }. `offset` is the
+  // light's first global logical index; `width` its local column count.
+  function layoutBlocks(sections, lights) {
+    const grouped = sectionsGroupedByDev(sections);
+    const totals = {}, offsets = {};
+    let run = 0;
+    for (const s of grouped) {
+      const dev = s.dev || 0;
+      if (totals[dev] == null) { totals[dev] = 0; offsets[dev] = run; }
+      totals[dev] += s.length; run += s.length;
+    }
+    return Object.keys(totals).map(Number).sort((a, b) => a - b).map((dev) => {
+      const l = lightOf(lights, dev);
+      const rows = Math.max(1, l.rows | 0);
+      const width = gridWidth(totals[dev], rows);
+      const d = gridDims(width, rows, !!l.transpose);
+      return { dev, x: Math.max(0, l.x | 0), y: Math.max(0, l.y | 0), w: d.w, h: d.h, width, rows, orient: { transpose: !!l.transpose, flipH: !!l.flipH, flipV: !!l.flipV }, offset: offsets[dev], total: totals[dev] };
+    });
+  }
+  function canvasDims(blocks) {
+    let w = 1, h = 1;
+    for (const b of blocks) { w = Math.max(w, b.x + b.w); h = Math.max(h, b.y + b.h); }
+    return { w, h };
+  }
+  function blockAt(vx, vy, blocks) {
+    for (const b of blocks) if (vx >= b.x && vx < b.x + b.w && vy >= b.y && vy < b.y + b.h) return b;
+    return null;
+  }
+  // Canvas cell → global logical index, or `totalAll` (sentinel: no segment here).
+  function canvasToLogical(vx, vy, blocks, totalAll) {
+    const b = blockAt(vx, vy, blocks);
+    if (!b) return totalAll;
+    const local = visualToLogical(vx - b.x, vy - b.y, b.width, b.rows, b.orient);
+    return local < b.total ? b.offset + local : totalAll;
+  }
+  // Exact inverse of canvasToLogical for every existing logical index, else null.
+  function logicalToCanvas(logical, blocks) {
+    for (const b of blocks) {
+      if (logical < b.offset || logical >= b.offset + b.total) continue;
+      const local = logical - b.offset;
+      // Undo visualToLogical: col*rows+row → (col,row) → un-transpose → un-flip.
+      const col = Math.floor(local / b.rows), row = local % b.rows;
+      let x = b.orient.transpose ? row : col, y = b.orient.transpose ? col : row;
+      if (b.orient.flipH) x = b.w - 1 - x;
+      if (b.orient.flipV) y = b.h - 1 - y;
+      return { vx: b.x + x, vy: b.y + y };
+    }
+    return null;
+  }
+
   // Split a flat per-global-physical-segment color array (null = off) into one
   // scene per controller. Each light picks its OWN most-common color as the
   // background (unlisted segments are painted bg by the device, so they cost
@@ -635,7 +704,7 @@
   window.CG = {
     GoveeDevice, buildSceneLeadings, decodeSceneLeadings, decodeParametricScene, buildPacket, COMMIT, sampleSource,
     hexToRgb, hslHex, dim, lerpHex, decomposeColor, hueRotate,
-    totalSegments, gridWidth, gridDims, visualToLogical, localPhysical, logicalToPhysical, sectionOfLogical, deviceLayout, splitScenes,
+    totalSegments, gridWidth, gridDims, visualToLogical, localPhysical, logicalToPhysical, sectionOfLogical, deviceLayout, splitScenes, sectionsGroupedByDev, layoutBlocks, canvasDims, blockAt, canvasToLogical, logicalToCanvas,
     nearestPalette, snapColors, shapeCells,
     bleLog: bleLogText, bleLogClear, bleLogEvent, bleRate,
   };
