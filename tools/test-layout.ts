@@ -5,7 +5,7 @@
 // 1. Single light (every section dev 0, or no dev at all): splitScenes must be
 //    byte-identical to the original one-scene encoder (reimplemented below as
 //    the oracle), so adding the second light changes nothing for the first.
-// 2. Two lights: each scene numbers its segments from 0, owns exactly its own
+// 2. Two or more lights (up to six): each scene numbers its segments from 0, owns exactly its own
 //    segments, and encode→decode→reassemble reproduces the global frame,
 //    including an interleaved (dev0, dev1, dev0) section order.
 (globalThis as any).window = globalThis;
@@ -57,8 +57,8 @@ for (let iter = 0; iter < 2000; iter++) {
 
 // --- 2. two lights: local indexing + round trip (ISC-24, ISC-31, ISC-34) ---
 for (let iter = 0; iter < 2000; iter++) {
-  const n = 2 + ri(3);
-  const sections = Array.from({ length: n }, (_, i) => ({ length: 1 + ri(45), reversed: false, serpentine: false, dev: iter % 3 === 0 ? i % 2 : (i < n / 2 ? 0 : 1) }));
+  const n = 2 + ri(5);
+  const sections = Array.from({ length: n }, (_, i) => ({ length: 1 + ri(45), reversed: false, serpentine: false, dev: iter % 3 === 0 ? i % 3 : (iter % 3 === 1 ? (i < n / 2 ? 0 : 1) : i) }));
   const total = totalSegments(sections);
   const lay = deviceLayout(sections);
   // per-device local idx is contiguous from 0 in global order

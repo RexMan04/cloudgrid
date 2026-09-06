@@ -3,7 +3,7 @@ project: CloudGrid
 task: System of record for CloudGrid (Govee H703B per-segment designer)
 effort: E3
 phase: complete
-progress: 18/19 (multi-device; ISC-30 deferred to hardware)
+progress: 23/24 (multi-device, N lights; ISC-30 deferred to hardware)
 mode: project
 started: 2026-08-10
 updated: 2026-09-06
@@ -80,6 +80,11 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - [x] ISC-40: Anti: single-light wire bytes are byte-identical to the pre-change encoder for legacy sections. Probe: test-emulator compares old vs new entries.
 - [x] ISC-41: Anti: no runtime dependency added. Probe: package.json dependencies unchanged.
 - [x] ISC-42: README documents the two-light setup and calibration. Probe: grep README.
+- [x] ISC-43: Lights card has "+ Add light"; each click adds a slot with its own row. Probe: browser eval rows after 2 clicks = LIGHT 1..3.
+- [x] ISC-44: A section's Light button cycles through every light and wraps. Probe: browser eval secs after two clicks = [0,2].
+- [x] ISC-45: Section cap is 2 per light for any light count. Probe: 3 lights, 5 adds → 6 sections, 264 segments.
+- [x] ISC-46: Removing a light drops its sections and renumbers higher lights. Probe: remove light 2 of 3 → secs [0,1,0,1], 2 rows.
+- [x] ISC-47: Light count persists and never drops below what sections reference. Probe: Read load path (`lightCount`, maxDev+1).
 - [x] ISC-24: Anti: no runtime npm dependencies creep into server/. Probe: package.json dependencies absent.
 - [ ] ISC-25: Anti: no dependency update lands on the deployed app without a human-merged PR. Probe: Renovate PR flow once app installed.
 - [x] ISC-26: Renovate App dashboard issue lists bun, dockerfile, and mise surfaces on GitHub. Probe: gh issue body.
@@ -169,3 +174,4 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - ISC-42: grep README — "Light 2" appears in Requirements, Usage and roadmap.
 - Browser: DOM-driven toggle S2 Light 1→2→1 persisted `[0,1,1,1]` then `[0,0,1,1]`; console errors excluding favicon: 0.
 - Hardware: NOT yet seen on the ceiling. Two-link BLE throughput on this BlueZ stack is unmeasured (advisor flag).
+- ISC-43..47 (2026-09-06, N lights): playwright-cli DOM-driven run on localhost — 2× "+ Add light" → rows LIGHT 1,2,3; S2 cycle → dev 2; 5× "+ Add" → secs [0,2,0,1,1,2], Grid 24 × 11, 264 segments; ✕ on light 2 → secs [0,1,0,1], 2 rows; console errors 0. `bun tools/test-layout.ts` 19729 passed (2–6 lights, interleaved).

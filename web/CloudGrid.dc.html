@@ -395,7 +395,10 @@
     <div onPointerDown="{{ startDragInspector }}" style="{{ splitterRight }}"><div style="{{ splitterGrip }}"></div></div>
     <div style="{{ inspectorStyle }}">
       <div style="{{ cardStyle }}">
-        <div style="{{ cardHead }}">Lights</div>
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div style="{{ cardHead }}">Lights</div>
+          <button onClick="{{ addLight }}" style="{{ addBtn }}">+ Add light</button>
+        </div>
         <div style="display:flex; align-items:center; gap:9px;">
           <span style="{{ statusDot }}"></span>
           <span style="font-size:12.5px; color:#cfd6e0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ deviceLine }}</span>
@@ -406,6 +409,9 @@
             <span style="font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#8b94a3; flex:none;">{{ lt.label }}</span>
             <span style="font-size:12px; color:#cfd6e0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0;">{{ lt.name }}</span>
             <button onClick="{{ lt.onToggle }}" style="{{ lt.btnStyle }}">{{ lt.btnLabel }}</button>
+            <sc-if value="{{ lt.canRemove }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ lt.onRemove }}" style="{{ chipBtnX }}">✕</button>
+            </sc-if>
           </div>
         </sc-for>
         <div style="display:flex; gap:7px; flex-wrap:wrap;">
@@ -550,7 +556,7 @@ class Component extends DCLogic {
     this.RECENT_MAX = 9;
     this.state = {
       connected: false, status: "Not connected", busy: false, powered: true,
-      devs: [{ connected: false, name: "" }, { connected: false, name: "" }],
+      devs: [{ connected: false, name: "" }], // one entry per light; grows with addLight
       seededDevs: [], // slots that already got their starter sections (so deleting them sticks)
       sections, rows: 11, transpose: false, flipH: false, flipV: false,
       colors: new Array(this.totalSegments(sections)).fill(null),
@@ -569,7 +575,7 @@ class Component extends DCLogic {
       sceneName: "", mediaStatus: "", aiPrompt: "", aiStatus: "", aiBusy: false, aiAnimated: false,
     };
     // non-render instance state
-    this.devices = [null, null]; // one GoveeDevice per light slot (see wireDevice)
+    this.devices = [null]; // one GoveeDevice per light slot, grows with addLight (see wireDevice)
     this.pushing = false; this.pendingPush = false;
     this.animRunning = false; this.animFrame = 0; this.playbackFrames = null;
     this.sceneChain = Promise.resolve(); this.sceneGen = 0;
@@ -587,7 +593,7 @@ class Component extends DCLogic {
       animate: "Streamed from the browser at the Frame rate set in the Device card; previews live on the grid and push per-light motion to the device. Breathe, Wave and Scroll animate your painted design.",
       media: "Load an image, GIF, or video. A still image samples once (use the fit and color sliders); a GIF or video loops live (Chrome/Edge only, capped at 240 frames).",
       ai: "Generates a pattern for the current grid. Needs an AI key in .env (ANTHROPIC_API_KEY or OPENAI_API_KEY); the key never reaches the browser.",
-      calibrate: "Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner. With two lights, each section's Light 1/2 button says which controller it is wired to.",
+      calibrate: "Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner. With several lights, each section's Light N button says which controller it is wired to; click it to hand the section to the next light.",
     };
     // dir bytes confirmed from official-app btsnoop capture (2026-06-23).
     // dir 0x13 is the DIY-scene render mode; SPEED decides its behavior on the
@@ -662,8 +668,13 @@ class Component extends DCLogic {
         ["sections", "rows", "transpose", "flipH", "flipV", "seededDevs", "selected", "gradColor", "recent", "paletteOn", "palette", "brightness", "effectId", "speed", "fps", "scenes"].forEach((k) => {
           if (p[k] != null) patch[k] = p[k];
         });
-        // Layouts saved before the second light have no `dev`: they belong to Light 1.
+        // Layouts saved before multi-light have no `dev`: they belong to Light 1.
         if (Array.isArray(patch.sections)) patch.sections = patch.sections.map((sec) => Object.assign({ dev: 0 }, sec));
+        // As many light slots as were saved, and never fewer than the sections reference.
+        const maxDev = (patch.sections || this.state.sections).reduce((m, sec) => Math.max(m, sec.dev || 0), 0);
+        const n = Math.max(1, p.lightCount || 1, maxDev + 1);
+        patch.devs = Array.from({ length: n }, () => ({ connected: false, name: "" }));
+        this.devices = new Array(n).fill(null);
         // Migrate an older auto-learned scene-interval cap (ms) to a manual fps.
         if (patch.fps == null && p.minSceneMs) patch.fps = Math.min(this.MAX_FPS, Math.max(this.MIN_FPS, Math.round((1000 / p.minSceneMs) * 2) / 2));
         // Migrate an older stored `effect` (raw dir byte) to an effect id, and
@@ -734,7 +745,7 @@ class Component extends DCLogic {
     try {
       const s = this.state;
       localStorage.setItem("cloudgrid", JSON.stringify({
-        sections: s.sections, rows: s.rows, transpose: s.transpose, flipH: s.flipH, flipV: s.flipV, seededDevs: s.seededDevs,
+        sections: s.sections, rows: s.rows, transpose: s.transpose, flipH: s.flipH, flipV: s.flipV, seededDevs: s.seededDevs, lightCount: s.devs.length,
         selected: s.selected, gradColor: s.gradColor, recent: s.recent, paletteOn: s.paletteOn, palette: s.palette, brightness: s.brightness, effectId: s.effectId, speed: s.speed, fps: s.fps, scenes: s.scenes,
       }));
     } catch (e) {}
@@ -984,7 +995,7 @@ class Component extends DCLogic {
     // This browser can't reconnect without the chooser (e.g. Brave). Don't fail
     // silently if we had a device — hint that a manual Connect is needed.
     if (!GD.autoReconnectSupported()) {
-      if (GD.hasKnownDevice(0) || GD.hasKnownDevice(1)) this.setState({ status: "Click Connect to reconnect (this browser can't auto-reconnect)" });
+      if (this.devices.some((_, slot) => GD.hasKnownDevice(slot))) this.setState({ status: "Click Connect to reconnect (this browser can't auto-reconnect)" });
       return;
     }
     // Both slots reconnect independently; a missing second light must not stop
@@ -1020,6 +1031,23 @@ class Component extends DCLogic {
     } catch (e) {
       this.setState({ status: "Connect failed: " + e.message });
     }
+  }
+  // Another controller. Slots are just indices: sections point at them by
+  // `dev`, the Lights card shows one row each, and there is no upper bound.
+  addLight() {
+    this.devices.push(null);
+    this.setState({ devs: this.state.devs.concat([{ connected: false, name: "" }]), status: "Light " + this.devices.length + " added; click its Connect" }, this._persist);
+  }
+  // Drop a light: disconnect it, delete the sections it owns (the canvas
+  // shrinks), and renumber the lights above it so `dev` stays an index.
+  removeLight(slot) {
+    if (slot === 0 || slot >= this.devices.length) return;
+    const dev = this.devices[slot];
+    if (dev) dev.disconnect();
+    this.devices.splice(slot, 1);
+    const devs = this.state.devs.filter((_, i) => i !== slot);
+    this.setState({ devs, connected: devs.some((d) => d.connected), seededDevs: this.state.seededDevs.filter((x) => x !== slot).map((x) => (x > slot ? x - 1 : x)), status: "Light " + (slot + 1) + " removed" });
+    this.setSections(this.state.sections.filter((sec) => (sec.dev || 0) !== slot).map((sec) => ((sec.dev || 0) > slot ? Object.assign({}, sec, { dev: sec.dev - 1 }) : sec)));
   }
   // A light that owns no sections has nothing to show. First time a slot
   // connects, give it a full H703B (2 strands × 44) so the canvas grows and it
@@ -1146,17 +1174,17 @@ class Component extends DCLogic {
   // segments max. One CloudGrid instance drives one controller; 3 controllers =
   // 270 LEDs total, but never more than 90 on any one. Other light models will
   // need their own caps when their BLE protocol is added.
-  // Each H703B addresses 2 strands (2 sections); with two lights that's 4 in
-  // all. A new section goes to the light that still has room, Light 1 first.
+  // Each H703B addresses 2 strands (2 sections), so the cap is 2 per light. A
+  // new section goes to the lowest-numbered light that still has room.
   addSection() {
     const per = (dev) => this.state.sections.filter((s) => (s.dev || 0) === dev).length;
-    const dev = per(0) < 2 ? 0 : (per(1) < 2 ? 1 : -1);
-    if (dev < 0) return;
+    const dev = this.state.devs.findIndex((_, i) => per(i) < 2);
+    if (dev < 0) { this.setState({ status: "Every light has its 2 sections; add a light first" }); return; }
     this.setSections(this.state.sections.concat([{ length: 44, reversed: false, serpentine: false, dev }]));
   }
-  // Hand a section to the other light. The grid stays put; only which
+  // Hand a section to the next light (wraps). The grid stays put; only which
   // controller the section's segments are written to changes.
-  toggleSectionDev(i) { this.setSections(this.state.sections.map((s, idx) => (idx === i ? Object.assign({}, s, { dev: (s.dev || 0) === 1 ? 0 : 1 }) : s))); }
+  toggleSectionDev(i) { const n = this.state.devs.length; this.setSections(this.state.sections.map((s, idx) => (idx === i ? Object.assign({}, s, { dev: ((s.dev || 0) + 1) % n }) : s))); }
   removeSection(i) { if (this.state.sections.length <= 1) return; this.setSections(this.state.sections.filter((_, idx) => idx !== i)); }
   setSectionLength(i, len) { const c = Math.max(1, Math.min(45, len || 1)); this.setSections(this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { length: c }) : s)); }
   toggleReverse(i) { this.setState({ sections: this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { reversed: !s.reversed }) : s) }, () => { this._persist(); this.push(); }); }
@@ -1937,6 +1965,8 @@ class Component extends DCLogic {
         name: d.connected ? (d.name || "Connected") : (st.sections.some((sec) => (sec.dev || 0) === i) ? "Not connected" : "Not connected · adds 88 cells"),
         dot: Object.assign({}, statusDot, { background: d.connected ? "#34cf6b" : "#5d6675", boxShadow: d.connected ? "0 0 7px #34cf6b" : "none" }),
         btnLabel: d.connected ? "Disconnect" : "Connect",
+        canRemove: i > 0 && !d.connected,
+        onRemove: () => this.removeLight(i),
         btnStyle: Object.assign({}, this._btn(false), { fontSize: "11.5px", padding: "5px 9px", flex: "none", background: d.connected ? "#181c23" : "rgba(52,207,107,0.14)", color: d.connected ? "#cfd6e0" : "#7ee6a3", borderColor: d.connected ? "#262b33" : "rgba(52,207,107,0.5)" }),
         onToggle: () => this.connectToggle(i),
       })),
@@ -1944,7 +1974,7 @@ class Component extends DCLogic {
       connectBtnSm: Object.assign({}, this._btn(false), { flex: 1, textAlign: "center", background: st.connected ? "#181c23" : "rgba(52,207,107,0.14)", color: st.connected ? "#cfd6e0" : "#7ee6a3", borderColor: st.connected ? "#262b33" : "rgba(52,207,107,0.5)" }),
       powerBtn: Object.assign({}, this._btn(st.connected && st.powered), { opacity: st.connected ? 1 : 0.45 }),
       pushBtn: Object.assign({}, btnPrimary, { textAlign: "center", opacity: st.connected ? 1 : 0.45 }),
-      mConnect: () => { const free = st.devs.findIndex((d) => !d.connected); if (free < 0) this.disconnect(); else this.connect(free); }, mPower: () => this.powerToggle(), mPush: () => this.push(),
+      mConnect: () => { const free = st.devs.findIndex((d) => !d.connected); if (free < 0) this.disconnect(); else this.connect(free); }, addLight: () => this.addLight(), mPower: () => this.powerToggle(), mPush: () => this.push(),
       copyBleLog: () => this.copyBleLog(), downloadBleLog: () => this.downloadBleLog(), clearBleLog: () => this.clearBleLog(),
       fps: st.fps, onFps: (e) => this.setFps(parseFloat(e.target.value)),
       fpsHint: "Lower it if the lights skip; ~4 fps is the full-grid limit",
@@ -2079,7 +2109,7 @@ class Component extends DCLogic {
       rows: st.rows, onRows: (e) => this.setRows(Number(e.target.value)),
       transposeBtn: this._btn(st.transpose), flipHBtn: this._btn(st.flipH), flipVBtn: this._btn(st.flipV),
       addSection: () => this.addSection(), addBtn: this._btn(false, { fs: "11.5px", pad: "5px 9px" }),
-      sections: st.sections.map((s, i) => ({ num: i + 1, length: s.length, canRemove: st.sections.length > 1, revStyle: this._btn(s.reversed, { fs: "11.5px", pad: "5px 9px" }), snakeStyle: this._btn(s.serpentine, { fs: "11.5px", pad: "5px 9px" }), onLen: (e) => this.setSectionLength(i, Number(e.target.value)), devLabel: "Light " + ((s.dev || 0) + 1), devStyle: this._btn((s.dev || 0) === 1, { fs: "11.5px", pad: "5px 9px" }), onDev: () => this.toggleSectionDev(i), onReverse: () => this.toggleReverse(i), onSnake: () => this.toggleSerpentine(i), onRemove: () => this.removeSection(i) })),
+      sections: st.sections.map((s, i) => ({ num: i + 1, length: s.length, canRemove: st.sections.length > 1, revStyle: this._btn(s.reversed, { fs: "11.5px", pad: "5px 9px" }), snakeStyle: this._btn(s.serpentine, { fs: "11.5px", pad: "5px 9px" }), onLen: (e) => this.setSectionLength(i, Number(e.target.value)), devLabel: "Light " + ((s.dev || 0) + 1), devStyle: this._btn((s.dev || 0) > 0, { fs: "11.5px", pad: "5px 9px" }), onDev: () => this.toggleSectionDev(i), onReverse: () => this.toggleReverse(i), onSnake: () => this.toggleSerpentine(i), onRemove: () => this.removeSection(i) })),
       // canvas
       cells, gridStyle, gridW: d.w, gridH: d.h, total: d.total, litCount,
       canvasViewport: (el) => { this._viewport = el; if (el && this._ro) { this._ro.observe(el); this._measure && this._measure(); } },
