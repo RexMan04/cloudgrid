@@ -192,8 +192,12 @@
   const LAST_DEVICE_KEY = "cloudgrid-device-id";
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // One instance per physical controller. `slot` (0 or 1) picks which
+  // remembered-device key this instance owns; slot 0 keeps the original key so
+  // an existing single-light setup reconnects exactly as before.
   class GoveeDevice {
-    constructor() {
+    constructor(slot) {
+      this.slot = slot || 0;
       this.device = null;
       this.writeChar = null;
       this.keepAlive = null;
@@ -216,11 +220,14 @@
     static autoReconnectSupported() {
       return !!(navigator.bluetooth && navigator.bluetooth.getDevices);
     }
-    static hasKnownDevice() {
-      try { return !!localStorage.getItem(LAST_DEVICE_KEY); } catch (e) { return false; }
+    static storageKey(slot) { return slot ? LAST_DEVICE_KEY + "-" + slot : LAST_DEVICE_KEY; }
+    static hasKnownDevice(slot) {
+      try { return !!localStorage.getItem(GoveeDevice.storageKey(slot || 0)); } catch (e) { return false; }
     }
     // Pick a device via the browser chooser (requires a user gesture).
-    async connect() {
+    // `excludeIds`: device ids already bound to another slot; picking one of
+    // those is refused so both slots can't drive the same controller.
+    async connect(excludeIds) {
       if (!navigator.bluetooth) {
         throw new Error("Web Bluetooth unavailable. Use Chrome/Edge (or enable the flag in Brave).");
       }
@@ -228,6 +235,9 @@
         acceptAllDevices: true,
         optionalServices: [SERVICE],
       });
+      if (excludeIds && excludeIds.indexOf(device.id) >= 0) {
+        throw new Error("That light is already connected as another slot. Pick the other one.");
+      }
       await this._attach(device);
     }
     // Reconnect to the last granted device without showing the chooser (no user
@@ -236,7 +246,7 @@
     async connectKnown() {
       if (!navigator.bluetooth || !navigator.bluetooth.getDevices) return false;
       let id = null;
-      try { id = localStorage.getItem(LAST_DEVICE_KEY); } catch (e) {}
+      try { id = localStorage.getItem(GoveeDevice.storageKey(this.slot)); } catch (e) {}
       if (!id) return false;
       let devices = [];
       try { devices = await navigator.bluetooth.getDevices(); } catch (e) { return false; }
@@ -248,7 +258,7 @@
     async _attach(device) {
       this.device = device;
       this._wantDisconnect = false;
-      try { localStorage.setItem(LAST_DEVICE_KEY, device.id); } catch (e) {}
+      try { localStorage.setItem(GoveeDevice.storageKey(this.slot), device.id); } catch (e) {}
       // getDevices() returns the same BluetoothDevice across reconnects, so drop
       // any handler from a prior _attach before adding one — otherwise listeners
       // (and their _autoReconnect calls) accumulate on the long-lived device.
@@ -537,6 +547,54 @@
     for (let i = 0; i < sections.length; i++) { if (p < offset + sections[i].length) return i; offset += sections[i].length; }
     return Math.max(0, sections.length - 1);
   }
+  // Which controller owns each global physical segment. Sections carry a `dev`
+  // slot (0 or 1; missing = 0, so pre-multi-light layouts are unchanged). The
+  // global physical index space stays one flat run over all sections, so the
+  // existing logical→physical calibration math is untouched; this just splits
+  // that run into per-device scenes, each indexed from 0 the way the controller
+  // expects. Returns { owner: [{dev, idx}] per global physical index, totals:
+  // segments per device, devs: sorted list of device slots in use }.
+  function deviceLayout(sections) {
+    const owner = [], totals = {};
+    for (const s of sections) {
+      const dev = s.dev || 0;
+      if (totals[dev] == null) totals[dev] = 0;
+      for (let i = 0; i < s.length; i++) owner.push({ dev, idx: totals[dev]++ });
+    }
+    const devs = Object.keys(totals).map(Number).sort((a, b) => a - b);
+    return { owner, totals, devs };
+  }
+  // Split a flat per-global-physical-segment color array (null = off) into one
+  // scene per controller. Each light picks its OWN most-common color as the
+  // background (unlisted segments are painted bg by the device, so they cost
+  // zero bytes) and lists the rest with device-local indices. Invariants that
+  // keep a single light's bytes identical to the original one-scene encoder:
+  // the histogram and the entry list both walk ascending GLOBAL index within a
+  // device (ties resolve to the first-seen color), and nothing device-specific
+  // enters the payload — which link a scene is written to is the identity.
+  // Returns [{ dev, entries, bg, total }] in ascending dev order.
+  function splitScenes(phys, sections) {
+    const OFF = [1, 1, 1];
+    const layout = deviceLayout(sections);
+    const total = layout.owner.length;
+    const key = (rgb) => (rgb ? rgb[0] + "," + rgb[1] + "," + rgb[2] : "off");
+    return layout.devs.map((dev) => {
+      const count = new Map();
+      for (let g = 0; g < total; g++) { if (layout.owner[g].dev !== dev) continue; const k = key(phys[g]); count.set(k, (count.get(k) || 0) + 1); }
+      let bgKey = "off", bgN = -1;
+      for (const [k, n] of count) { if (n > bgN) { bgN = n; bgKey = k; } }
+      const bg = bgKey === "off" ? OFF : bgKey.split(",").map(Number);
+      const entries = [];
+      for (let g = 0; g < total; g++) {
+        const o = layout.owner[g];
+        if (o.dev !== dev) continue;
+        if (key(phys[g]) === bgKey) continue; // covered by the background, sent for free
+        const rgb = phys[g] || OFF;
+        entries.push({ seg: o.idx, r: rgb[0], g: rgb[1], b: rgb[2] });
+      }
+      return { dev, entries, bg, total: layout.totals[dev] };
+    });
+  }
 
   // Snap an arbitrary color to the nearest approved color. Distance uses the
   // "redmean" weighting so matches look right to the eye, not just numerically.
@@ -577,7 +635,7 @@
   window.CG = {
     GoveeDevice, buildSceneLeadings, decodeSceneLeadings, decodeParametricScene, buildPacket, COMMIT, sampleSource,
     hexToRgb, hslHex, dim, lerpHex, decomposeColor, hueRotate,
-    totalSegments, gridWidth, gridDims, visualToLogical, localPhysical, logicalToPhysical, sectionOfLogical,
+    totalSegments, gridWidth, gridDims, visualToLogical, localPhysical, logicalToPhysical, sectionOfLogical, deviceLayout, splitScenes,
     nearestPalette, snapColors, shapeCells,
     bleLog: bleLogText, bleLogClear, bleLogEvent, bleRate,
   };

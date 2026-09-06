@@ -395,13 +395,20 @@
     <div onPointerDown="{{ startDragInspector }}" style="{{ splitterRight }}"><div style="{{ splitterGrip }}"></div></div>
     <div style="{{ inspectorStyle }}">
       <div style="{{ cardStyle }}">
-        <div style="{{ cardHead }}">Device</div>
+        <div style="{{ cardHead }}">Lights</div>
         <div style="display:flex; align-items:center; gap:9px;">
           <span style="{{ statusDot }}"></span>
           <span style="font-size:12.5px; color:#cfd6e0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ deviceLine }}</span>
         </div>
+        <sc-for list="{{ lights }}" as="lt" hint-placeholder-count="2">
+          <div style="display:flex; align-items:center; gap:8px; background:#0e1116; border:1px solid #232932; border-radius:7px; padding:7px 9px;">
+            <span style="{{ lt.dot }}"></span>
+            <span style="font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#8b94a3; flex:none;">{{ lt.label }}</span>
+            <span style="font-size:12px; color:#cfd6e0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0;">{{ lt.name }}</span>
+            <button onClick="{{ lt.onToggle }}" style="{{ lt.btnStyle }}">{{ lt.btnLabel }}</button>
+          </div>
+        </sc-for>
         <div style="display:flex; gap:7px; flex-wrap:wrap;">
-          <button onClick="{{ mConnect }}" style="{{ connectBtnSm }}">{{ connectLabel }}</button>
           <button onClick="{{ mPower }}" style="{{ powerBtn }}">Power</button>
         </div>
         <button onClick="{{ mPush }}" style="{{ pushBtn }}">Push design now</button>
@@ -447,6 +454,7 @@
           <div style="display:flex; flex-wrap:wrap; align-items:center; gap:7px; background:#0e1116; border:1px solid #232932; border-radius:7px; padding:8px 9px;">
             <span style="font-weight:600; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#8b94a3; margin-right:2px;">S{{ sec.num }}</span>
             <input type="number" min="1" max="45" value="{{ sec.length }}" onChange="{{ sec.onLen }}" style="{{ numInputSm }}" />
+            <button onClick="{{ sec.onDev }}" style="{{ sec.devStyle }}">{{ sec.devLabel }}</button>
             <button onClick="{{ sec.onReverse }}" style="{{ sec.revStyle }}">Reverse</button>
             <button onClick="{{ sec.onSnake }}" style="{{ sec.snakeStyle }}">Snake</button>
             <sc-if value="{{ sec.canRemove }}" hint-placeholder-val="{{ false }}">
@@ -542,6 +550,8 @@ class Component extends DCLogic {
     this.RECENT_MAX = 9;
     this.state = {
       connected: false, status: "Not connected", busy: false, powered: true,
+      devs: [{ connected: false, name: "" }, { connected: false, name: "" }],
+      seededDevs: [], // slots that already got their starter sections (so deleting them sticks)
       sections, rows: 11, transpose: false, flipH: false, flipV: false,
       colors: new Array(this.totalSegments(sections)).fill(null),
       bright: new Array(this.totalSegments(sections)).fill(100),
@@ -559,7 +569,7 @@ class Component extends DCLogic {
       sceneName: "", mediaStatus: "", aiPrompt: "", aiStatus: "", aiBusy: false, aiAnimated: false,
     };
     // non-render instance state
-    this.device = null;
+    this.devices = [null, null]; // one GoveeDevice per light slot (see wireDevice)
     this.pushing = false; this.pendingPush = false;
     this.animRunning = false; this.animFrame = 0; this.playbackFrames = null;
     this.sceneChain = Promise.resolve(); this.sceneGen = 0;
@@ -577,7 +587,7 @@ class Component extends DCLogic {
       animate: "Streamed from the browser at the Frame rate set in the Device card; previews live on the grid and push per-light motion to the device. Breathe, Wave and Scroll animate your painted design.",
       media: "Load an image, GIF, or video. A still image samples once (use the fit and color sliders); a GIF or video loops live (Chrome/Edge only, capped at 240 frames).",
       ai: "Generates a pattern for the current grid. Needs an AI key in .env (ANTHROPIC_API_KEY or OPENAI_API_KEY); the key never reaches the browser.",
-      calibrate: "Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner.",
+      calibrate: "Paint the top-left cell, see which LED lights, then toggle until the on-screen top-left matches your back-left corner. With two lights, each section's Light 1/2 button says which controller it is wired to.",
     };
     // dir bytes confirmed from official-app btsnoop capture (2026-06-23).
     // dir 0x13 is the DIY-scene render mode; SPEED decides its behavior on the
@@ -649,9 +659,11 @@ class Component extends DCLogic {
       if (raw) {
         const p = JSON.parse(raw);
         const patch = {};
-        ["sections", "rows", "transpose", "flipH", "flipV", "selected", "gradColor", "recent", "paletteOn", "palette", "brightness", "effectId", "speed", "fps", "scenes"].forEach((k) => {
+        ["sections", "rows", "transpose", "flipH", "flipV", "seededDevs", "selected", "gradColor", "recent", "paletteOn", "palette", "brightness", "effectId", "speed", "fps", "scenes"].forEach((k) => {
           if (p[k] != null) patch[k] = p[k];
         });
+        // Layouts saved before the second light have no `dev`: they belong to Light 1.
+        if (Array.isArray(patch.sections)) patch.sections = patch.sections.map((sec) => Object.assign({ dev: 0 }, sec));
         // Migrate an older auto-learned scene-interval cap (ms) to a manual fps.
         if (patch.fps == null && p.minSceneMs) patch.fps = Math.min(this.MAX_FPS, Math.max(this.MIN_FPS, Math.round((1000 / p.minSceneMs) * 2) / 2));
         // Migrate an older stored `effect` (raw dir byte) to an effect id, and
@@ -716,13 +728,13 @@ class Component extends DCLogic {
     if (this._ro) this._ro.disconnect();
     this.animRunning = false;
     if (this.fxTimer) clearTimeout(this.fxTimer);
-    if (this.device) this.device.disconnect();
+    this.devices.forEach((d) => d && d.disconnect());
   }
   _persist() {
     try {
       const s = this.state;
       localStorage.setItem("cloudgrid", JSON.stringify({
-        sections: s.sections, rows: s.rows, transpose: s.transpose, flipH: s.flipH, flipV: s.flipV,
+        sections: s.sections, rows: s.rows, transpose: s.transpose, flipH: s.flipH, flipV: s.flipV, seededDevs: s.seededDevs,
         selected: s.selected, gradColor: s.gradColor, recent: s.recent, paletteOn: s.paletteOn, palette: s.palette, brightness: s.brightness, effectId: s.effectId, speed: s.speed, fps: s.fps, scenes: s.scenes,
       }));
     } catch (e) {}
@@ -801,6 +813,33 @@ class Component extends DCLogic {
     this.sceneChain = run.catch(() => {});
     return run;
   }
+  // ---- multi-light fan-out ----
+  connectedDevices() { return this.devices.filter((d) => d && d.connected); }
+  anyConnected() { return this.connectedDevices().length > 0; }
+  // Write one scene per light, on all links at once: each controller has its own
+  // GATT link, so the lights don't queue behind each other and a frame costs the
+  // slowest light, not the sum. A light that is dropped, or that owns no
+  // sections, is skipped so one bad link never stalls the other. Resolves when
+  // every write has drained.
+  async sendScenes(scenes, opts) {
+    const jobs = [], who = [];
+    this.devices.forEach((dev, slot) => {
+      if (!dev || !dev.connected) return;
+      const sc = scenes.find((x) => x.dev === slot);
+      // A connected light that owns no sections gets a blank scene, so handing
+      // its sections to the other light doesn't leave stale pixels burning.
+      const entries = sc ? sc.entries : [], bg = sc ? sc.bg : [1, 1, 1];
+      who.push(slot);
+      jobs.push(dev.setScene(entries, Object.assign({}, opts, { bg })));
+    });
+    // allSettled: one dropped link must not hide the other light's result or
+    // abort the frame loop; report the failures after every write has drained.
+    const res = await Promise.allSettled(jobs);
+    const failed = res.map((r, i) => (r.status === "rejected" ? "Light " + (who[i] + 1) + ": " + String((r.reason && r.reason.message) || r.reason) : null)).filter(Boolean);
+    if (failed.length) throw new Error(failed.join("; "));
+  }
+  // The same command to every connected light (power, replay, clear).
+  eachDevice(fn) { return Promise.all(this.connectedDevices().map((d) => fn(d))); }
   // Build the wire scene from the design and choose the most efficient encoding.
   // Every physical segment gets a color (off = the bg sentinel); the MOST COMMON
   // color is then chosen as the scene background. The device paints every
@@ -813,7 +852,8 @@ class Component extends DCLogic {
   // Returns { entries, bg } for setScene.
   buildEntries(colors, bright, quant) {
     const scale = this.state.brightness / 100;
-    const total = this.totalSegments(this.state.sections);
+    const sections = this.state.sections;
+    const total = this.totalSegments(sections);
     const OFF = [1, 1, 1];
     const phys = new Array(total).fill(null);
     colors.forEach((c, p) => {
@@ -825,19 +865,14 @@ class Component extends DCLogic {
       if (quant) { r = Math.min(255, Math.round(r / quant) * quant); g = Math.min(255, Math.round(g / quant) * quant); b = Math.min(255, Math.round(b / quant) * quant); }
       phys[this.logicalToPhysical(p, this.state.sections, this.state.rows)] = [r, g, b];
     });
-    const key = (rgb) => (rgb ? rgb[0] + "," + rgb[1] + "," + rgb[2] : "off");
-    const count = new Map();
-    for (let sgt = 0; sgt < total; sgt++) { const k = key(phys[sgt]); count.set(k, (count.get(k) || 0) + 1); }
-    let bgKey = "off", bgN = -1;
-    for (const [k, n] of count) { if (n > bgN) { bgN = n; bgKey = k; } }
-    const bg = bgKey === "off" ? OFF : bgKey.split(",").map(Number);
-    const entries = [];
-    for (let sgt = 0; sgt < total; sgt++) {
-      if (key(phys[sgt]) === bgKey) continue; // covered by the background, sent for free
-      const rgb = phys[sgt] || OFF;
-      entries.push({ seg: sgt, r: rgb[0], g: rgb[1], b: rgb[2] });
-    }
-    return { entries, bg };
+    // One scene per light (CG.splitScenes): the flat physical run is split by
+    // which controller owns each segment; each light picks its OWN background
+    // and numbers its segments from 0, which is what its controller expects.
+    // With a single light this is byte-for-byte the old single scene.
+    const scenes = window.CG.splitScenes(phys, sections);
+    // entries/bg mirror the first light for callers that only care about one.
+    const first = scenes[0] || { entries: [], bg: OFF };
+    return { scenes, entries: first.entries, bg: first.bg };
   }
   // ---- emulator preview ----------------------------------------------------
   // The on-canvas animation preview is the WIRE decoded, not the raw frame: build
@@ -849,22 +884,34 @@ class Component extends DCLogic {
   // { entries, bg, preview }; preview is a per-logical hex array for previewColors.
   _emulateFrame(logicalColors) {
     const total = this.totalSegments(this.state.sections);
-    const { entries, bg } = this.buildEntries(logicalColors, null, 24);
-    const leadings = window.CG.buildSceneLeadings(entries, { dir: 0x13, speed: 0, bg });
-    const dec = window.CG.decodeSceneLeadings(leadings, total);
+    const built = this.buildEntries(logicalColors, null, 24);
+    const preview = this._decodeScenesPreview(built.scenes, total);
+    return { scenes: built.scenes, entries: built.entries, bg: built.bg, preview };
+  }
+  // Run each light's scene back through the controller emulator and place the
+  // decoded segments on canvas cells. Every light decodes in its own local index
+  // space; deviceLayout says where each local segment sits in the global run.
+  _decodeScenesPreview(scenes, total) {
+    const layout = window.CG.deviceLayout(this.state.sections);
     const inv = this._physToLogical(total);
     const preview = new Array(total).fill(null);
-    if (dec.perSegment) {
-      for (let p = 0; p < total; p++) {
-        const lp = inv[p];
-        if (lp == null) continue;
-        const rgb = dec.phys[p];
-        // [1,1,1] is the OFF sentinel the encoder uses for unlit segments; show it
-        // as a dark cell (null), not as near-black #010101.
-        preview[lp] = (rgb[0] === 1 && rgb[1] === 1 && rgb[2] === 1) ? null : this._rgbHex(rgb);
-      }
+    const decoded = {};
+    for (const sc of scenes) {
+      const leadings = window.CG.buildSceneLeadings(sc.entries, { dir: 0x13, speed: 0, bg: sc.bg });
+      decoded[sc.dev] = window.CG.decodeSceneLeadings(leadings, sc.total);
     }
-    return { entries, bg, preview };
+    for (let g = 0; g < total; g++) {
+      const lp = inv[g];
+      if (lp == null) continue;
+      const o = layout.owner[g], dec = decoded[o.dev];
+      if (!dec || !dec.perSegment) continue;
+      const rgb = dec.phys[o.idx];
+      if (!rgb) continue;
+      // [1,1,1] is the OFF sentinel the encoder uses for unlit segments; show it
+      // as a dark cell (null), not as near-black #010101.
+      preview[lp] = (rgb[0] === 1 && rgb[1] === 1 && rgb[2] === 1) ? null : this._rgbHex(rgb);
+    }
+    return preview;
   }
   // Inverse of logicalToPhysical for the current layout: inv[physicalIndex] =
   // logicalIndex, so a decoded per-physical-segment scene maps back to canvas cells.
@@ -881,30 +928,31 @@ class Component extends DCLogic {
   // share dir 0x13, so we resolve by id, not dir.
   effectEntry() { return this.EFFECTS.find((e) => e.id === this.state.effectId) || this.EFFECTS[0]; }
   async sendFrame(logicalColors, prebuilt) {
-    if (!this.device || !this.device.connected) return;
+    if (!this.anyConnected()) return;
     // Quantize (animation only, q=24) so smooth gradients collapse into far fewer
     // colors/packets, and let buildEntries pick the background so the dominant
     // color costs zero bytes. Together these keep per-frame traffic minimal. The
     // loop passes the entries it already built for the emulated preview, so the
     // exact same bytes drive the lights and the canvas.
-    const { entries, bg } = prebuilt || this.buildEntries(logicalColors, null, 24);
+    const built = prebuilt || this.buildEntries(logicalColors, null, 24);
     // Each live-animation frame is its own static scene; the browser swaps them
     // to make the motion, so the device must HOLD each frame (speed 0).
-    await this.queueScene(() => this.device.setScene(entries, { dir: 0x13, speed: 0, bg }));
+    await this.queueScene(() => this.sendScenes(built.scenes, { dir: 0x13, speed: 0 }));
   }
   async push() {
     this.stopScenePreview();
     if (this.animRunning) { this.animRunning = false; this.playbackFrames = null; this.setState({ animationId: null, previewColors: null }); }
-    if (!this.device || !this.device.connected) return;
+    if (!this.anyConnected()) return;
     if (this.pushing) { this.pendingPush = true; return; }
     this.pushing = true; this.setState({ busy: true });
     try {
       do {
         this.pendingPush = false;
-        const { entries, bg } = this.buildEntries(this.state.colors, this.state.bright);
+        const built = this.buildEntries(this.state.colors, this.state.bright);
         const eff = this.effectEntry();
-        await this.queueScene(() => this.device.setScene(entries, { dir: eff.dir, speed: eff.hold ? 0 : this.state.speed, bg }));
-        this.setState({ status: "Pushed design (" + entries.length + " segs on wire)" });
+        const onWire = built.scenes.reduce((a, sc) => a + sc.entries.length, 0);
+        await this.queueScene(() => this.sendScenes(built.scenes, { dir: eff.dir, speed: eff.hold ? 0 : this.state.speed }));
+        this.setState({ status: "Pushed design (" + onWire + " segs on wire" + (built.scenes.length > 1 ? ", " + built.scenes.length + " lights" : "") + ")" });
       } while (this.pendingPush);
     } catch (e) {
       this.setState({ status: "Push failed: " + e.message });
@@ -913,49 +961,88 @@ class Component extends DCLogic {
     }
   }
 
-  wireDevice(dev) {
-    dev.onDisconnect = (intentional) => this.setState({ connected: false, status: intentional ? "Disconnected" : "Reconnecting…" });
+  wireDevice(dev, slot) {
+    const tag = "Light " + (slot + 1);
+    dev.onDisconnect = (intentional) => this._setDev(slot, { connected: false }, intentional ? tag + " disconnected" : tag + " reconnecting…");
     dev.onReconnect = () => {
-      this.setState({ connected: true, status: "Connected: " + dev.name });
+      this._setDev(slot, { connected: true, name: dev.name }, tag + " back: " + dev.name);
       // Don't clobber a running live animation with a stale static push; the
       // frame loop skips sending while disconnected and resumes on its own once
       // the link is back. Only re-push the static design if nothing's animating.
       if (!this.animRunning) this.push();
     };
   }
+  // Per-slot link state plus the derived any-connected flag the UI keys off.
+  _setDev(slot, patch, status) {
+    const devs = this.state.devs.map((d, i) => (i === slot ? Object.assign({}, d, patch) : d));
+    const st = { devs, connected: devs.some((d) => d.connected) };
+    if (status) st.status = status;
+    this.setState(st);
+  }
   async tryAutoConnect() {
     const GD = window.CG.GoveeDevice;
     // This browser can't reconnect without the chooser (e.g. Brave). Don't fail
     // silently if we had a device — hint that a manual Connect is needed.
     if (!GD.autoReconnectSupported()) {
-      if (GD.hasKnownDevice()) this.setState({ status: "Click Connect to reconnect (this browser can't auto-reconnect)" });
+      if (GD.hasKnownDevice(0) || GD.hasKnownDevice(1)) this.setState({ status: "Click Connect to reconnect (this browser can't auto-reconnect)" });
       return;
     }
-    const dev = new GD();
-    this.wireDevice(dev);
-    try {
-      if (await dev.connectKnown()) {
-        this.device = dev;
-        this.setState({ connected: true, powered: true, status: "Connected: " + dev.name });
-      }
-    } catch (e) { /* not in range or not granted; stay disconnected */ }
+    // Both slots reconnect independently; a missing second light must not stop
+    // the first from coming back.
+    await Promise.all(this.devices.map(async (_, slot) => {
+      if (!GD.hasKnownDevice(slot)) return;
+      const dev = new GD(slot);
+      this.wireDevice(dev, slot);
+      try {
+        if (await dev.connectKnown()) {
+          this.devices[slot] = dev;
+          this._setDev(slot, { connected: true, name: dev.name }, "Connected: " + dev.name);
+          this.setState({ powered: true });
+        }
+      } catch (e) { /* not in range or not granted; stay disconnected */ }
+    }));
   }
-  async connect() {
+  async connect(slot) {
     if (!window.CG) return;
-    const dev = new window.CG.GoveeDevice();
-    this.wireDevice(dev);
-    this.setState({ status: "Connecting…" });
+    slot = slot || 0;
+    const dev = new window.CG.GoveeDevice(slot);
+    this.wireDevice(dev, slot);
+    this.setState({ status: "Connecting Light " + (slot + 1) + "…" });
     try {
-      await dev.connect();
-      this.device = dev;
-      this.setState({ connected: true, powered: true, status: "Connected: " + dev.name });
+      // Refuse the controller already bound to the other slot.
+      const taken = this.devices.filter((d, i) => d && i !== slot && d.device).map((d) => d.device.id);
+      await dev.connect(taken);
+      this.devices[slot] = dev;
+      this._setDev(slot, { connected: true, name: dev.name }, "Connected: " + dev.name);
+      this.setState({ powered: true });
+      this.ensureSectionsFor(slot);
       await dev.powerOn();
     } catch (e) {
       this.setState({ status: "Connect failed: " + e.message });
     }
   }
-  disconnect() { if (this.device) this.device.disconnect(); this.setState({ connected: false, status: "Disconnected" }); }
-  connectToggle() { if (this.state.connected) this.disconnect(); else this.connect(); }
+  // A light that owns no sections has nothing to show. First time a slot
+  // connects, give it a full H703B (2 strands × 44) so the canvas grows and it
+  // lights up at once; calibrate its sections the same way as the first light.
+  ensureSectionsFor(slot) {
+    if (slot === 0 || this.state.seededDevs.indexOf(slot) >= 0) return;
+    if (this.state.sections.some((sec) => (sec.dev || 0) === slot)) return;
+    this.setState({ seededDevs: this.state.seededDevs.concat([slot]) });
+    this.setSections(this.state.sections.concat([
+      { length: 44, reversed: false, serpentine: false, dev: slot },
+      { length: 44, reversed: false, serpentine: false, dev: slot },
+    ]));
+  }
+  disconnect(slot) {
+    if (slot == null) {
+      this.devices.forEach((d) => d && d.disconnect());
+      this.setState({ devs: this.state.devs.map((d) => Object.assign({}, d, { connected: false })), connected: false, status: "Disconnected" });
+      return;
+    }
+    if (this.devices[slot]) this.devices[slot].disconnect();
+    this._setDev(slot, { connected: false }, "Light " + (slot + 1) + " disconnected");
+  }
+  connectToggle(slot) { slot = slot || 0; if (this.state.devs[slot].connected) this.disconnect(slot); else this.connect(slot); }
   // BLE diagnostics: copy/clear/download the timestamped event log (scene pushes,
   // disconnects, reconnects, write errors) so connection problems are inspectable.
   copyBleLog() {
@@ -971,7 +1058,7 @@ class Component extends DCLogic {
   }
   clearBleLog() { if (window.CG && window.CG.bleLogClear) window.CG.bleLogClear(); this.setState({ status: "BLE log cleared" }); }
   async powerToggle() {
-    if (!this.device || !this.device.connected) return;
+    if (!this.anyConnected()) return;
     const next = !this.state.powered;
     // A live animation streams a fresh scene every frame, so powering off is
     // futile while one runs: the next frame immediately re-lights the strip.
@@ -983,7 +1070,7 @@ class Component extends DCLogic {
     this.setState({ powered: next });
     // Revert the optimistic toggle if the BLE write fails, so the UI never claims
     // a power state the device isn't actually in.
-    try { if (next) await this.device.powerOn(); else await this.device.powerOff(); }
+    try { await this.eachDevice((d) => (next ? d.powerOn() : d.powerOff())); }
     catch (e) { this.setState({ powered: !next, status: "Power toggle failed: " + e.message }); }
   }
 
@@ -1059,7 +1146,17 @@ class Component extends DCLogic {
   // segments max. One CloudGrid instance drives one controller; 3 controllers =
   // 270 LEDs total, but never more than 90 on any one. Other light models will
   // need their own caps when their BLE protocol is added.
-  addSection() { if (this.state.sections.length >= 2) return; this.setSections(this.state.sections.concat([{ length: 44, reversed: false, serpentine: false }])); }
+  // Each H703B addresses 2 strands (2 sections); with two lights that's 4 in
+  // all. A new section goes to the light that still has room, Light 1 first.
+  addSection() {
+    const per = (dev) => this.state.sections.filter((s) => (s.dev || 0) === dev).length;
+    const dev = per(0) < 2 ? 0 : (per(1) < 2 ? 1 : -1);
+    if (dev < 0) return;
+    this.setSections(this.state.sections.concat([{ length: 44, reversed: false, serpentine: false, dev }]));
+  }
+  // Hand a section to the other light. The grid stays put; only which
+  // controller the section's segments are written to changes.
+  toggleSectionDev(i) { this.setSections(this.state.sections.map((s, idx) => (idx === i ? Object.assign({}, s, { dev: (s.dev || 0) === 1 ? 0 : 1 }) : s))); }
   removeSection(i) { if (this.state.sections.length <= 1) return; this.setSections(this.state.sections.filter((_, idx) => idx !== i)); }
   setSectionLength(i, len) { const c = Math.max(1, Math.min(45, len || 1)); this.setSections(this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { length: c }) : s)); }
   toggleReverse(i) { this.setState({ sections: this.state.sections.map((s, idx) => idx === i ? Object.assign({}, s, { reversed: !s.reversed }) : s) }, () => { this._persist(); this.push(); }); }
@@ -1159,7 +1256,7 @@ class Component extends DCLogic {
     this.stopEffectPreview();
     this.stopScenePreview();
     this.sceneGen++;
-    if (this.device && this.device.connected) { this.setState({ status: "Cleared" }); this.queueScene(() => this.device.setScene([], { dir: 0x13, bg: [0, 0, 0] })); }
+    if (this.anyConnected()) { this.setState({ status: "Cleared" }); this.queueScene(() => this.eachDevice((d) => d.setScene([], { dir: 0x13, bg: [0, 0, 0] }))); }
   }
   fillAll() { this.snapshot(); const total = this.totalSegments(this.state.sections); this.setState({ colors: new Array(total).fill(this.state.selected), bright: new Array(total).fill(this.state.brushBright) }, () => this.push()); this.useColor(this.state.selected); }
 
@@ -1236,16 +1333,16 @@ class Component extends DCLogic {
       // Emulate the frame: build the wire once, decode it back, and preview THAT.
       // The canvas now shows exactly what the device renders (same bytes), and the
       // very entries we previewed are the ones we send.
-      const { entries, bg, preview } = this._emulateFrame(logical);
+      const { scenes, preview } = this._emulateFrame(logical);
       this.setState({ previewColors: preview });
-      if (this.device && this.device.connected) {
+      if (this.anyConnected()) {
         // Push this frame and WAIT for the write to drain before advancing, so no
         // two writes overlap (overlap is what floods the link) and every frame is
         // shown in order. Idle after the write = target interval minus how long
         // the write actually took.
         this._frameInFlight = true;
         const t0 = Date.now();
-        await this.sendFrame(logical, { entries, bg }).catch(() => {});
+        await this.sendFrame(logical, { scenes }).catch(() => {});
         this._frameInFlight = false;
         const writeMs = Date.now() - t0;
         const gap = Math.max(this.HARD_MIN_GAP_MS, this.sceneIntervalMs() - writeMs);
@@ -1268,7 +1365,7 @@ class Component extends DCLogic {
   // frame rate. Click again to stop and return to the static design.
   toggleTestMotion() {
     if (this.animRunning && this.state.animationId === "__calib__") { this.stopAnimation(); return; }
-    if (!this.device || !this.device.connected) { this.setState({ status: "Connect a device to test the frame rate" }); return; }
+    if (!this.anyConnected()) { this.setState({ status: "Connect a device to test the frame rate" }); return; }
     this.startAnimation("__calib__");
   }
   // Build a logical color array from a visual-coords fn (for the test patterns).
@@ -1290,7 +1387,7 @@ class Component extends DCLogic {
   runTest(id) {
     const def = this.TESTS.find((t) => t.id === id);
     if (!def) return;
-    if (!this.device || !this.device.connected) { this.setState({ status: "Connect a device to run a test pattern" }); return; }
+    if (!this.anyConnected()) { this.setState({ status: "Connect a device to run a test pattern" }); return; }
     const total = this.totalSegments(this.state.sections);
     if (window.CG) window.CG.bleLogEvent("test", { name: def.id, fps: this.state.fps });
     this.setState({ colors: def.build(), bright: new Array(total).fill(100), status: "Testing: " + def.label + " @ " + this.state.fps + " fps" }, () => this.startAnimation("__calib__"));
@@ -1313,11 +1410,11 @@ class Component extends DCLogic {
     if (this.animRunning) { this.animRunning = false; this.playbackFrames = null; this.setState({ animationId: null }); }
     const previewed = this.startScenePreview(scene);
     if (!previewed) this.setState({ previewColors: null });
-    const connected = this.device && this.device.connected;
+    const connected = this.anyConnected();
     if (window.CG) window.CG.bleLogEvent("replay", { id: scene.id, fmt: scene.fmt, type: scene.type });
     this.setState({ status: (connected ? "Playing scene " : "Preview only — connect to play ") + scene.label });
     if (!connected) return;
-    try { await this.queueScene(() => this.device.replayScene(scene.pkts)); }
+    try { await this.queueScene(() => this.eachDevice((d) => d.replayScene(scene.pkts))); }
     catch (e) { this.setState({ status: "Scene failed: " + e.message }); }
   }
   startAnimation(id) {
@@ -1832,14 +1929,22 @@ class Component extends DCLogic {
       cardStyle, cardHead, btnGhost, btnPrimary, btnPrimaryGhost,
       // status / device
       status: st.status, busy: st.busy, connected: st.connected,
-      connectLabel: st.connected ? "Disconnect" : "Connect device",
-      deviceLine: st.connected ? ((this.device && this.device.name) || "Connected") : "No device connected",
+      connectLabel: st.devs.every((d) => d.connected) ? "Disconnect all" : (st.connected ? "Connect Light " + (st.devs.findIndex((d) => !d.connected) + 1) : "Connect device"),
+      deviceLine: st.connected ? (st.devs.filter((d) => d.connected).length + " of " + st.devs.length + " lights connected") : "No lights connected",
       statusDot,
+      lights: st.devs.map((d, i) => ({
+        label: "Light " + (i + 1),
+        name: d.connected ? (d.name || "Connected") : (st.sections.some((sec) => (sec.dev || 0) === i) ? "Not connected" : "Not connected · adds 88 cells"),
+        dot: Object.assign({}, statusDot, { background: d.connected ? "#34cf6b" : "#5d6675", boxShadow: d.connected ? "0 0 7px #34cf6b" : "none" }),
+        btnLabel: d.connected ? "Disconnect" : "Connect",
+        btnStyle: Object.assign({}, this._btn(false), { fontSize: "11.5px", padding: "5px 9px", flex: "none", background: d.connected ? "#181c23" : "rgba(52,207,107,0.14)", color: d.connected ? "#cfd6e0" : "#7ee6a3", borderColor: d.connected ? "#262b33" : "rgba(52,207,107,0.5)" }),
+        onToggle: () => this.connectToggle(i),
+      })),
       connectBtn: Object.assign({}, btnPrimary, st.connected ? { background: "#1b2027", color: "#cfd6e0", border: "1px solid #2a313b" } : {}),
       connectBtnSm: Object.assign({}, this._btn(false), { flex: 1, textAlign: "center", background: st.connected ? "#181c23" : "rgba(52,207,107,0.14)", color: st.connected ? "#cfd6e0" : "#7ee6a3", borderColor: st.connected ? "#262b33" : "rgba(52,207,107,0.5)" }),
       powerBtn: Object.assign({}, this._btn(st.connected && st.powered), { opacity: st.connected ? 1 : 0.45 }),
       pushBtn: Object.assign({}, btnPrimary, { textAlign: "center", opacity: st.connected ? 1 : 0.45 }),
-      mConnect: () => this.connectToggle(), mPower: () => this.powerToggle(), mPush: () => this.push(),
+      mConnect: () => { const free = st.devs.findIndex((d) => !d.connected); if (free < 0) this.disconnect(); else this.connect(free); }, mPower: () => this.powerToggle(), mPush: () => this.push(),
       copyBleLog: () => this.copyBleLog(), downloadBleLog: () => this.downloadBleLog(), clearBleLog: () => this.clearBleLog(),
       fps: st.fps, onFps: (e) => this.setFps(parseFloat(e.target.value)),
       fpsHint: "Lower it if the lights skip; ~4 fps is the full-grid limit",
@@ -1974,7 +2079,7 @@ class Component extends DCLogic {
       rows: st.rows, onRows: (e) => this.setRows(Number(e.target.value)),
       transposeBtn: this._btn(st.transpose), flipHBtn: this._btn(st.flipH), flipVBtn: this._btn(st.flipV),
       addSection: () => this.addSection(), addBtn: this._btn(false, { fs: "11.5px", pad: "5px 9px" }),
-      sections: st.sections.map((s, i) => ({ num: i + 1, length: s.length, canRemove: st.sections.length > 1, revStyle: this._btn(s.reversed, { fs: "11.5px", pad: "5px 9px" }), snakeStyle: this._btn(s.serpentine, { fs: "11.5px", pad: "5px 9px" }), onLen: (e) => this.setSectionLength(i, Number(e.target.value)), onReverse: () => this.toggleReverse(i), onSnake: () => this.toggleSerpentine(i), onRemove: () => this.removeSection(i) })),
+      sections: st.sections.map((s, i) => ({ num: i + 1, length: s.length, canRemove: st.sections.length > 1, revStyle: this._btn(s.reversed, { fs: "11.5px", pad: "5px 9px" }), snakeStyle: this._btn(s.serpentine, { fs: "11.5px", pad: "5px 9px" }), onLen: (e) => this.setSectionLength(i, Number(e.target.value)), devLabel: "Light " + ((s.dev || 0) + 1), devStyle: this._btn((s.dev || 0) === 1, { fs: "11.5px", pad: "5px 9px" }), onDev: () => this.toggleSectionDev(i), onReverse: () => this.toggleReverse(i), onSnake: () => this.toggleSerpentine(i), onRemove: () => this.removeSection(i) })),
       // canvas
       cells, gridStyle, gridW: d.w, gridH: d.h, total: d.total, litCount,
       canvasViewport: (el) => { this._viewport = el; if (el && this._ro) { this._ro.observe(el); this._measure && this._measure(); } },

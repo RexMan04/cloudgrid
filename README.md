@@ -36,7 +36,7 @@ Two kinds of motion are available: the device's **native effects** (persistent, 
 
 - [Bun](https://bun.sh)
 - A Chromium browser with Web Bluetooth: **Chrome or Edge** out of the box, or **Brave** with `brave://flags/#brave-web-bluetooth-api` enabled.
-- A Govee **H703B** dot-string light. That's the only device I've built and tested against. Other Govee RGBIC devices that use the same DIY-scene Bluetooth protocol may work, but I haven't tried them yet (adapting to more devices is a possible future step).
+- One or two Govee **H703B** dot-string lights. Two lights drive one canvas: each calibration section is tagged **Light 1** or **Light 2**, each light gets its own scene with its own background, and frames go out on both Bluetooth links at once. The H703B is the only device I've built and tested against. Other Govee RGBIC devices that use the same DIY-scene Bluetooth protocol may work, but I haven't tried them yet (adapting to more devices is a possible future step).
 
 ## Stack
 
@@ -63,7 +63,7 @@ git config core.hooksPath .githooks
 bun run dev
 ```
 
-Open **http://localhost:8787**, click **Connect device**, pick your light, and start painting. (`bun install` first if you want editor types; the app itself has no runtime dependencies.)
+Open **http://localhost:8787**, click **Connect device**, pick your light, and start painting. For a second light, click **Connect** on the **Light 2** row: the canvas grows by 88 cells (two 44-segment sections tagged Light 2), and you calibrate those sections with Reverse / Snake exactly like the first light's. Each row of the Lights card connects and disconnects on its own; a drop on one never stalls the other. (`bun install` first if you want editor types; the app itself has no runtime dependencies.)
 
 One Bun process serves the whole thing: the static frontend and the AI endpoint. The browser talks to the lights directly over Web Bluetooth, so the server is only in the loop for AI generation.
 
@@ -113,7 +113,7 @@ Planning consequence: live full-grid motion is inherently low-fps, and it gets w
 
 ## Roadmap
 
-- Map segment index → physical position; full 24×11 multi-device ceiling grid (one controller today).
+- Map segment index → physical position; full 24×11 ceiling grid (two controllers supported today; N is a UI change away, `deviceLayout` already models any count).
 - dir `0x13` is the DIY-scene render mode, and speed decides its behavior on-device: speed 0 holds the design dead still (**Static**), speed > 0 smoothly flows the dot colors into each other (**Gradient**). Both are exposed as effects; painted designs and live-animation frames always push at speed 0 so they stay put.
 - Scene playlists / a frame-by-frame animation editor.
 - Broader device support beyond the H703B.
