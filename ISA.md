@@ -3,7 +3,7 @@ project: CloudGrid
 task: System of record for CloudGrid (Govee H703B per-segment designer)
 effort: E3
 phase: complete
-progress: 37/40 (ISC-30, 58, 59 deferred to hardware) (multi-device, N lights; ISC-30 deferred to hardware)
+progress: 40/43 (ISC-30, 58, 59 deferred to hardware) (multi-device, N lights; ISC-30 deferred to hardware)
 mode: project
 started: 2026-08-10
 updated: 2026-09-06
@@ -104,6 +104,9 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - [x] ISC-61: Anti: single-light layouts already calibrated render and push byte-identically after migration. Probe: test-layout (ISC-50) + splitScenes identity.
 - [x] ISC-62: Anti: no runtime dependency added. Probe: package.json.
 - [x] ISC-63: README documents Layout mode, Identify, Walk. Probe: grep README.
+- [x] ISC-64: The block is the strand: each section carries its own x, y, rows, transpose, flips; a light is only the connection. Probe: test-layout per-section fuzz; browser eval of sections after drag.
+- [x] ISC-65: Two strands of one light can be swapped or placed anywhere by drag alone. Probe: drag S2 to x 0 and S1 to x 4 → sections [[0,4,0],[0,0,0]].
+- [x] ISC-66: Per-light saves from the previous deploy migrate into per-strand geometry keeping each light's block position and flips. Probe: browser load of {lights:[..{x:9,y:3,flipH}]} → S3/S4 at (9,3),(13,3) flipH.
 - [x] ISC-24: Anti: no runtime npm dependencies creep into server/. Probe: package.json dependencies absent.
 - [ ] ISC-25: Anti: no dependency update lands on the deployed app without a human-merged PR. Probe: Renovate PR flow once app installed.
 - [x] ISC-26: Renovate App dashboard issue lists bun, dockerfile, and mise surfaces on GitHub. Probe: gh issue body.
@@ -162,6 +165,9 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 
 - 2026-09-06 — Block layout: per-section `dev` stays, sections regroup by light on every set so the flat logical run is contiguous per light and all existing calibration math survives; each light is a placed block, canvas = bounding box; canvas size is frozen for the duration of a drag (advisor trap: re-centring grid chased the pointer, observed as a 1-row overshoot before the fix); paint stays per logical index so dead cells cannot hold colour; walk is drain-paced. Forge quota-blocked → core written by Atlas; delegation floor relaxed (show-math: one state model, two files).
 
+- 2026-09-06 — Strands, not lights, are the placed unit. Kaden: "the entire sections are out of order." With light-level blocks a strand's screen position was welded to its wire order, and swapping two strands needed flipH + Reverse + Reverse + flipV. Geometry moved onto the section; lights keep only connection state. Wire order stays the array order so all physical mapping is untouched.
+- Changelog entry — conjectured: the light is the right block unit. refuted_by: a controller's two strands hang independently; Kaden's ceiling had them out of order. learned: the placed unit must be the smallest physical wire run. criterion_now: ISC-64.
+
 ## Changelog
 
 - conjectured: the repo's dependency surface was too small to justify automation (one devDependency).
@@ -211,3 +217,4 @@ A browser-based grid designer that gives full per-dot control of an H703B over l
 - ISC-60: grep — identify/startWalk call stopMotion() (stopAnimation + sceneGen++); push() and startAnimation() clear `walking`.
 - ISC-62: package.json unchanged. ISC-63: README "Placing and calibrating several lights" section.
 - Console errors across all runs: 0 (favicon excluded). Forge unavailable (OpenAI usage limit); core written in-family, advisor (Inference.ts) reviewed the design after one timeout.
+- ISC-64..66 (2026-09-06, strands): layout tests 29729 passed (per-section geometry, wire order != screen order); browser: legacy-global save → Grid 16 × 11; per-light save → S3/S4 (9,3)/(13,3) flipH; drag S2 to (0,0) then S1 to (4,0) → swapped; Flip ↔ on S2 alone; walk preview one white cell; console errors 0.

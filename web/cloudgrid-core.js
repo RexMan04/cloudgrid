@@ -542,7 +542,7 @@
     for (const s of sections) {
       if (p < offset + s.length) {
         const l = lights && lights[s.dev || 0];
-        return offset + localPhysical(p - offset, s, l && l.rows ? l.rows : rows);
+        return offset + localPhysical(p - offset, s, s.rows ? s.rows : (l && l.rows ? l.rows : rows));
       }
       offset += s.length;
     }
@@ -570,43 +570,51 @@
     const devs = Object.keys(totals).map(Number).sort((a, b) => a - b);
     return { owner, totals, devs };
   }
-  // ---- light blocks: where each controller sits on the shared canvas ----------
-  // A light is a rectangular block. Its own logical run (its sections, which the
-  // caller keeps grouped by light in array order) wraps into a local grid by its
-  // own run length and orientation, exactly as the whole canvas used to; the
-  // block is then placed at (x, y). The canvas is the bounding box of all blocks
-  // and any cell outside every block is "no segment".
-  const DEFAULT_LIGHT = { x: 0, y: 0, rows: 11, transpose: false, flipH: false, flipV: false };
-  function lightOf(lights, dev) { return Object.assign({}, DEFAULT_LIGHT, (lights && lights[dev]) || {}); }
+  // ---- section blocks: where each strand hangs on the shared canvas ----------
+  // The physical unit is the STRAND (a section: one wire run of the controller).
+  // Each section is a rectangular block with its own run length `rows`,
+  // orientation, and position; its logical run wraps into a local grid exactly
+  // as the whole canvas used to. The canvas is the bounding box of all blocks;
+  // a cell outside every block is "no segment". Sections keep wire order in
+  // the array (grouped by light), so global logical index == wire order and the
+  // existing physical mapping is untouched; only WHERE a section is drawn moves.
+  const DEFAULT_GEOM = { x: 0, y: 0, rows: 11, transpose: false, flipH: false, flipV: false };
+  function sectionGeom(sec) {
+    const g = Object.assign({}, DEFAULT_GEOM);
+    for (const k of Object.keys(DEFAULT_GEOM)) if (sec[k] != null) g[k] = sec[k];
+    return g;
+  }
   // Stable regroup so every light's sections are contiguous, in light order.
   function sectionsGroupedByDev(sections) {
     return sections.map((s, i) => ({ s, i })).sort((a, b) => ((a.s.dev || 0) - (b.s.dev || 0)) || (a.i - b.i)).map((x) => x.s);
   }
-  // One block per light that owns at least one segment, in light order:
-  // { dev, x, y, w, h, width, rows, orient, offset, total }. `offset` is the
-  // light's first global logical index; `width` its local column count.
-  function layoutBlocks(sections, lights) {
-    const grouped = sectionsGroupedByDev(sections);
-    const totals = {}, offsets = {};
-    let run = 0;
-    for (const s of grouped) {
-      const dev = s.dev || 0;
-      if (totals[dev] == null) { totals[dev] = 0; offsets[dev] = run; }
-      totals[dev] += s.length; run += s.length;
-    }
-    return Object.keys(totals).map(Number).sort((a, b) => a - b).map((dev) => {
-      const l = lightOf(lights, dev);
-      const rows = Math.max(1, l.rows | 0);
-      const width = gridWidth(totals[dev], rows);
-      const d = gridDims(width, rows, !!l.transpose);
-      return { dev, x: Math.max(0, l.x | 0), y: Math.max(0, l.y | 0), w: d.w, h: d.h, width, rows, orient: { transpose: !!l.transpose, flipH: !!l.flipH, flipV: !!l.flipV }, offset: offsets[dev], total: totals[dev] };
+  // One block per section, in array (wire) order:
+  // { sec, dev, x, y, w, h, width, rows, orient, offset, total }.
+  // `offset` is the section's first global logical index; `width` its local
+  // column count. A section with no saved position is placed just right of the
+  // previous block (touching), so an un-positioned layout reads left to right.
+  function layoutBlocks(sections) {
+    const out = [];
+    let offset = 0, cx = 0;
+    sections.forEach((sec, i) => {
+      const g = sectionGeom(sec);
+      const rows = Math.max(1, g.rows | 0);
+      const width = gridWidth(sec.length, rows);
+      const d = gridDims(width, rows, !!g.transpose);
+      const placed = sec.x != null && sec.y != null;
+      const x = placed ? Math.max(0, g.x | 0) : cx, y = placed ? Math.max(0, g.y | 0) : 0;
+      out.push({ sec: i, dev: sec.dev || 0, x, y, w: d.w, h: d.h, width, rows, orient: { transpose: !!g.transpose, flipH: !!g.flipH, flipV: !!g.flipV }, offset, total: sec.length });
+      offset += sec.length;
+      cx = Math.max(cx, x + d.w);
     });
+    return out;
   }
   function canvasDims(blocks) {
     let w = 1, h = 1;
     for (const b of blocks) { w = Math.max(w, b.x + b.w); h = Math.max(h, b.y + b.h); }
     return { w, h };
   }
+  // Overlaps resolve to the earliest section.
   function blockAt(vx, vy, blocks) {
     for (const b of blocks) if (vx >= b.x && vx < b.x + b.w && vy >= b.y && vy < b.y + b.h) return b;
     return null;
@@ -623,7 +631,6 @@
     for (const b of blocks) {
       if (logical < b.offset || logical >= b.offset + b.total) continue;
       const local = logical - b.offset;
-      // Undo visualToLogical: col*rows+row → (col,row) → un-transpose → un-flip.
       const col = Math.floor(local / b.rows), row = local % b.rows;
       let x = b.orient.transpose ? row : col, y = b.orient.transpose ? col : row;
       if (b.orient.flipH) x = b.w - 1 - x;
@@ -704,7 +711,7 @@
   window.CG = {
     GoveeDevice, buildSceneLeadings, decodeSceneLeadings, decodeParametricScene, buildPacket, COMMIT, sampleSource,
     hexToRgb, hslHex, dim, lerpHex, decomposeColor, hueRotate,
-    totalSegments, gridWidth, gridDims, visualToLogical, localPhysical, logicalToPhysical, sectionOfLogical, deviceLayout, splitScenes, sectionsGroupedByDev, layoutBlocks, canvasDims, blockAt, canvasToLogical, logicalToCanvas,
+    totalSegments, gridWidth, gridDims, visualToLogical, localPhysical, logicalToPhysical, sectionOfLogical, deviceLayout, splitScenes, sectionsGroupedByDev, sectionGeom, layoutBlocks, canvasDims, blockAt, canvasToLogical, logicalToCanvas,
     nearestPalette, snapColors, shapeCells,
     bleLog: bleLogText, bleLogClear, bleLogEvent, bleRate,
   };

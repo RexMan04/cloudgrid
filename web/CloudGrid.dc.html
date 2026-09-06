@@ -440,12 +440,12 @@
       <div style="{{ cardStyle }}">
         <div style="display:flex; align-items:center; gap:6px;"><div style="{{ cardHead }}">{{ calibTitle }}</div><span onMouseEnter="{{ tipOn.calibrate }}" onMouseLeave="{{ hideTip }}" style="{{ helpIcon }}">i</span></div>
         <div style="display:flex; flex-wrap:wrap; gap:6px;">
-          <sc-for list="{{ calibLights }}" as="cl" hint-placeholder-count="1">
+          <sc-for list="{{ calibSecs }}" as="cl" hint-placeholder-count="2">
             <button onClick="{{ cl.onPick }}" style="{{ cl.style }}">{{ cl.label }}</button>
           </sc-for>
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:6px;">
-          <button onClick="{{ identify }}" style="{{ nudgeBtn }}">Identify (flash)</button>
+          <button onClick="{{ identify }}" style="{{ nudgeBtn }}">{{ identifyLabel }}</button>
           <button onClick="{{ walk }}" style="{{ walkBtn }}">{{ walkLabel }}</button>
         </div>
         <div style="{{ sliderRow }}">
@@ -577,7 +577,7 @@ class Component extends DCLogic {
       connected: false, status: "Not connected", busy: false, powered: true,
       devs: [{ connected: false, name: "" }], // one entry per light; grows with addLight
       seededDevs: [], // slots that already got their starter sections (so deleting them sticks)
-      sections, lights: [this._defaultLight()], calibLight: 0, layoutMode: false, walkOn: false,
+      sections, calibSec: 0, layoutMode: false, walkOn: false,
       colors: new Array(this.totalSegments(sections)).fill(null),
       bright: new Array(this.totalSegments(sections)).fill(100),
       previewColors: null,
@@ -612,7 +612,7 @@ class Component extends DCLogic {
       animate: "Streamed from the browser at the Frame rate set in the Device card; previews live on the grid and push per-light motion to the device. Breathe, Wave and Scroll animate your painted design.",
       media: "Load an image, GIF, or video. A still image samples once (use the fit and color sliders); a GIF or video loops live (Chrome/Edge only, capped at 240 frames).",
       ai: "Generates a pattern for the current grid. Needs an AI key in .env (ANTHROPIC_API_KEY or OPENAI_API_KEY); the key never reaches the browser.",
-      calibrate: "Pick a light. Identify flashes it so you know which one it is. Walk runs a single dot along its wire while the matching cell lights on screen: if the two dots move differently, hit Reverse / Snake on its sections or Flip / Transpose here until they match. Place lights (drag) lets you drag each light\'s block to where it really sits.",
+      calibrate: "Each strand (section) is its own block: pick one, then Flash its light to see which light it is, and Walk the light: a single dot runs along the wire while the matching cell lights on screen. If the two dots move differently, Reverse / Snake the strand, Flip / Transpose it, or drag it with Place strands to where it really hangs.",
     };
     // dir bytes confirmed from official-app btsnoop capture (2026-06-23).
     // dir 0x13 is the DIY-scene render mode; SPEED decides its behavior on the
@@ -684,7 +684,7 @@ class Component extends DCLogic {
       if (raw) {
         const p = JSON.parse(raw);
         const patch = {};
-        ["sections", "lights", "seededDevs", "selected", "gradColor", "recent", "paletteOn", "palette", "brightness", "effectId", "speed", "fps", "scenes"].forEach((k) => {
+        ["sections", "seededDevs", "selected", "gradColor", "recent", "paletteOn", "palette", "brightness", "effectId", "speed", "fps", "scenes"].forEach((k) => {
           if (p[k] != null) patch[k] = p[k];
         });
         // Layouts saved before multi-light have no `dev`: they belong to Light 1.
@@ -694,16 +694,19 @@ class Component extends DCLogic {
         const n = Math.max(1, p.lightCount || 1, maxDev + 1);
         patch.devs = Array.from({ length: n }, () => ({ connected: false, name: "" }));
         this.devices = new Array(n).fill(null);
-        // Per-light layout. A layout saved before blocks had one global run
-        // length + orientation: that becomes Light 1's, and any further lights
-        // copy it and line up side by side, which is how they were drawn before.
+        // Per-section geometry. Older saves had one global run length and
+        // orientation (or, briefly, one per light): every section that lacks
+        // its own gets that, and un-positioned sections are laid left to right
+        // grouped by light, which is how they were drawn before.
         const legacy = { rows: p.rows != null ? p.rows : 11, transpose: !!p.transpose, flipH: !!p.flipH, flipV: !!p.flipV };
-        let lights = Array.isArray(p.lights) ? p.lights.map((l) => Object.assign(this._defaultLight(), l)) : [];
-        while (lights.length < n) lights.push(Object.assign(this._defaultLight(), lights.length ? lights[lights.length - 1] : legacy, { x: 0, y: 0 }));
-        lights = lights.slice(0, n);
-        if (!Array.isArray(p.lights)) lights = this._placeSideBySide(lights, patch.sections || this.state.sections);
-        patch.lights = lights;
-        patch.sections = window.CG.sectionsGroupedByDev(patch.sections || this.state.sections);
+        const lightsOld = Array.isArray(p.lights) ? p.lights : [];
+        const secs = window.CG.sectionsGroupedByDev(patch.sections || this.state.sections).map((sec) => {
+          const src = lightsOld[sec.dev || 0] || legacy;
+          const out = Object.assign({}, sec);
+          for (const k of ["rows", "transpose", "flipH", "flipV"]) if (out[k] == null) out[k] = src[k];
+          return out;
+        });
+        patch.sections = secs.some((sec) => sec.x == null || sec.y == null) ? this._placeInRow(secs, lightsOld) : secs;
         // Migrate an older auto-learned scene-interval cap (ms) to a manual fps.
         if (patch.fps == null && p.minSceneMs) patch.fps = Math.min(this.MAX_FPS, Math.max(this.MIN_FPS, Math.round((1000 / p.minSceneMs) * 2) / 2));
         // Migrate an older stored `effect` (raw dir byte) to an effect id, and
@@ -774,7 +777,7 @@ class Component extends DCLogic {
     try {
       const s = this.state;
       localStorage.setItem("cloudgrid", JSON.stringify({
-        sections: s.sections, lights: s.lights, seededDevs: s.seededDevs, lightCount: s.devs.length,
+        sections: s.sections, seededDevs: s.seededDevs, lightCount: s.devs.length,
         selected: s.selected, gradColor: s.gradColor, recent: s.recent, paletteOn: s.paletteOn, palette: s.palette, brightness: s.brightness, effectId: s.effectId, speed: s.speed, fps: s.fps, scenes: s.scenes,
       }));
     } catch (e) {}
@@ -800,7 +803,7 @@ class Component extends DCLogic {
     return window.CG.canvasToLogical(vx, vy, bl, this.totalSegments(this.state.sections));
   }
   localPhysical(p, s, rows) { return window.CG.localPhysical(p, s, rows); }
-  logicalToPhysical(p, sections, rows) { return window.CG.logicalToPhysical(p, sections, rows, this.state.lights); }
+  logicalToPhysical(p, sections, rows) { return window.CG.logicalToPhysical(p, sections, rows); }
   sectionOfLogical(p, sections) { return window.CG.sectionOfLogical(p, sections); }
   hexToRgb(hex) { return window.CG.hexToRgb(hex); }
   hslHex(h, s, l) { return window.CG.hslHex(h, s, l); }
@@ -843,18 +846,27 @@ class Component extends DCLogic {
   }
   hideTip() { if (this.state.tip) this.setState({ tip: null }); }
 
-  _defaultLight() { return { x: 0, y: 0, rows: 11, transpose: false, flipH: false, flipV: false }; }
-  // Lay lights out left to right in light order, touching. Used for migration
-  // and for placing a light that has never been positioned.
-  _placeSideBySide(lights, sections) {
-    const blocks = window.CG.layoutBlocks(sections, lights);
+  _defaultGeom() { return { rows: 11, transpose: false, flipH: false, flipV: false }; }
+  // Give every section a position: left to right in wire order, each light's
+  // strands touching, each light starting where its old block was (if the save
+  // had per-light blocks) or right after the previous light.
+  _placeInRow(sections, lightsOld) {
+    const bare = sections.map((sec) => { const c = Object.assign({}, sec); delete c.x; delete c.y; return c; });
+    const blocks = window.CG.layoutBlocks(bare);
+    const cursor = {};
     let cx = 0;
-    return lights.map((l, i) => { const b = blocks.find((bb) => bb.dev === i); const nl = Object.assign({}, l, { x: cx, y: 0 }); cx += b ? b.w : 0; return nl; });
+    return sections.map((sec, i) => {
+      const dev = sec.dev || 0, b = blocks[i];
+      if (cursor[dev] == null) { const l = lightsOld && lightsOld[dev]; cursor[dev] = { x: l && l.x != null ? l.x : cx, y: l && l.y != null ? l.y : 0 }; }
+      const out = Object.assign({}, sec, { x: cursor[dev].x, y: cursor[dev].y });
+      cursor[dev].x += b.w; cx = Math.max(cx, cursor[dev].x);
+      return out;
+    });
   }
-  // One block per light on the shared canvas (see CG.layoutBlocks). The canvas
-  // is their bounding box; in Layout mode it gets 2 cells of slack on the right
-  // and bottom so a block can be dragged outward.
-  _blocks() { return window.CG.layoutBlocks(this.state.sections, this.state.lights); }
+  // One block per section (strand) on the shared canvas (see CG.layoutBlocks).
+  // The canvas is their bounding box; in Layout mode it gets 2 cells of slack
+  // on the right and bottom so a block can be dragged outward.
+  _blocks() { return window.CG.layoutBlocks(this.state.sections); }
   dims() {
     const total = this.totalSegments(this.state.sections);
     const blocks = this._blocks();
@@ -1090,13 +1102,7 @@ class Component extends DCLogic {
   // `dev`, the Lights card shows one row each, and there is no upper bound.
   addLight() {
     this.devices.push(null);
-    // New light copies the last one's run length and orientation and sits to
-    // the right of everything, so it shows up where you'd expect and calibrates
-    // from a sensible start.
-    const last = this.state.lights[this.state.lights.length - 1] || this._defaultLight();
-    const c = window.CG.canvasDims(this._blocks());
-    const light = Object.assign({}, last, { x: c.w, y: 0 });
-    this.setState({ devs: this.state.devs.concat([{ connected: false, name: "" }]), lights: this.state.lights.concat([light]), calibLight: this.state.lights.length, status: "Light " + this.devices.length + " added; click its Connect" }, this._persist);
+    this.setState({ devs: this.state.devs.concat([{ connected: false, name: "" }]), status: "Light " + this.devices.length + " added; click its Connect" }, this._persist);
   }
   // Drop a light: disconnect it, delete the sections it owns (the canvas
   // shrinks), and renumber the lights above it so `dev` stays an index.
@@ -1106,7 +1112,7 @@ class Component extends DCLogic {
     if (dev) dev.disconnect();
     this.devices.splice(slot, 1);
     const devs = this.state.devs.filter((_, i) => i !== slot);
-    this.setState({ devs, lights: this.state.lights.filter((_, i) => i !== slot), calibLight: Math.min(this.state.calibLight, devs.length - 1), connected: devs.some((d) => d.connected), seededDevs: this.state.seededDevs.filter((x) => x !== slot).map((x) => (x > slot ? x - 1 : x)), status: "Light " + (slot + 1) + " removed" });
+    this.setState({ devs, calibSec: 0, connected: devs.some((d) => d.connected), seededDevs: this.state.seededDevs.filter((x) => x !== slot).map((x) => (x > slot ? x - 1 : x)), status: "Light " + (slot + 1) + " removed" });
     this.setSections(this.state.sections.filter((sec) => (sec.dev || 0) !== slot).map((sec) => ((sec.dev || 0) > slot ? Object.assign({}, sec, { dev: sec.dev - 1 }) : sec)));
   }
   // A light that owns no sections has nothing to show. First time a slot
@@ -1116,11 +1122,12 @@ class Component extends DCLogic {
     if (slot === 0 || this.state.seededDevs.indexOf(slot) >= 0) return;
     if (this.state.sections.some((sec) => (sec.dev || 0) === slot)) return;
     this.setState({ seededDevs: this.state.seededDevs.concat([slot]) });
-    const c = window.CG.canvasDims(this._blocks());
-    this.setLight(slot, { x: c.w, y: 0 }, true);
+    // No x/y: layoutBlocks places an un-positioned strand right after the last
+    // block, so the new light shows up to the right until you drag it.
+    const g = this._geomLike(slot);
     this.setSections(this.state.sections.concat([
-      { length: 44, reversed: false, serpentine: false, dev: slot },
-      { length: 44, reversed: false, serpentine: false, dev: slot },
+      Object.assign({ length: 44, reversed: false, serpentine: false, dev: slot }, g),
+      Object.assign({ length: 44, reversed: false, serpentine: false, dev: slot }, g),
     ]));
   }
   disconnect(slot) {
@@ -1188,15 +1195,17 @@ class Component extends DCLogic {
     // size, so re-push so the device matches the editor (like reverse/snake).
     this.setState({ sections, colors, bright }, () => { this._persist(); this.push(); });
   }
-  // Calibration edits apply to the light picked in the Calibrate card.
-  setLight(dev, patch, quiet) {
-    const lights = this.state.lights.map((l, i) => (i === dev ? Object.assign({}, l, patch) : l));
-    this.setState({ lights }, quiet ? this._persistSoon : () => { this._persist(); this.push(); });
+  // Calibration edits apply to the strand (section) picked in the Calibrate
+  // card. Geometry is stored on the section itself.
+  setSecGeom(i, patch, quiet) {
+    const sections = this.state.sections.map((sec, idx) => (idx === i ? Object.assign({}, sec, patch) : sec));
+    this.setState({ sections }, quiet ? this._persistSoon : () => { this._persist(); this.push(); });
   }
-  calibLight() { return this.state.lights[this.state.calibLight] || this.state.lights[0]; }
-  setRows(n) { this.setLight(this.state.calibLight, { rows: Math.max(1, Math.min(45, n || 1)) }); }
-  setLightPos(dev, x, y) { this.setLight(dev, { x: Math.max(0, Math.round(x) || 0), y: Math.max(0, Math.round(y) || 0) }); }
-  nudgeLight(dx, dy) { const l = this.calibLight(); this.setLightPos(this.state.calibLight, l.x + dx, l.y + dy); }
+  calibSec() { return this.state.sections[this.state.calibSec] || this.state.sections[0]; }
+  calibGeom() { return window.CG.sectionGeom(this.calibSec() || {}); }
+  setRows(n) { this.setSecGeom(this.state.calibSec, { rows: Math.max(1, Math.min(45, n || 1)) }); }
+  setSecPos(i, x, y) { this.setSecGeom(i, { x: Math.max(0, Math.round(x) || 0), y: Math.max(0, Math.round(y) || 0) }); }
+  nudgeSec(dx, dy) { const g = this.calibGeom(); this.setSecPos(this.state.calibSec, g.x + dx, g.y + dy); }
   toggleLayoutMode() { this.grab = null; this.setState({ layoutMode: !this.state.layoutMode, tool: "brush", erasing: false, dragCells: null, selection: null }); }
   // Layout mode drag: grab a block by the cell under the pointer, keep that
   // grab offset, and move the block as the pointer enters other cells. The
@@ -1206,15 +1215,14 @@ class Component extends DCLogic {
     const b = window.CG.blockAt(vx, vy, this._blocks());
     if (!b) return;
     const c = window.CG.canvasDims(this._blocks());
-    this.grab = { dev: b.dev, dx: vx - b.x, dy: vy - b.y, w: b.w, h: b.h, frozen: { w: c.w + 2, h: c.h + 2 } };
-    this.setState({ calibLight: b.dev });
+    this.grab = { sec: b.sec, dx: vx - b.x, dy: vy - b.y, w: b.w, h: b.h, frozen: { w: c.w + 2, h: c.h + 2 } };
+    this.setState({ calibSec: b.sec });
   }
   layoutEnter(vx, vy) {
     if (!this.grab) return;
-    const l = this.state.lights[this.grab.dev];
-    const g = this.grab;
+    const g = this.grab, sec = this.state.sections[g.sec];
     const nx = Math.max(0, Math.min(g.frozen.w - g.w, vx - g.dx)), ny = Math.max(0, Math.min(g.frozen.h - g.h, vy - g.dy));
-    if (l && (nx !== l.x || ny !== l.y)) this.setLight(this.grab.dev, { x: nx, y: ny }, true);
+    if (sec && (nx !== sec.x || ny !== sec.y)) this.setSecGeom(g.sec, { x: nx, y: ny }, true);
   }
   layoutUp() { if (!this.grab) return; this.grab = null; this._persist(); this.push(); }
   // Flash one light solid white on its own link so you can see which physical
@@ -1224,9 +1232,8 @@ class Component extends DCLogic {
     if (!d || !d.connected) { this.setState({ status: "Connect Light " + (dev + 1) + " first" }); return; }
     this.stopMotion();
     const total = this.totalSegments(this.state.sections);
-    const b = this._blocks().find((x) => x.dev === dev);
     const preview = new Array(total).fill(null);
-    if (b) for (let i = 0; i < b.total; i++) preview[b.offset + i] = "#ffffff";
+    for (const b of this._blocks()) if (b.dev === dev) for (let i = 0; i < b.total; i++) preview[b.offset + i] = "#ffffff";
     this.setState({ previewColors: preview, status: "Identifying Light " + (dev + 1) + "…" });
     try { await this.queueScene(() => d.setScene([], { dir: 0x13, speed: 0, bg: [255, 255, 255] })); } catch (e) {}
     await new Promise((r) => setTimeout(r, 1500));
@@ -1258,7 +1265,7 @@ class Component extends DCLogic {
     if (!n) { this.setState({ status: "Light " + (dev + 1) + " has no sections to walk" }); return; }
     const device = this.devices[dev], live = !!(device && device.connected);
     this.walking = dev;
-    this.setState({ walkOn: true, calibLight: dev });
+    this.setState({ walkOn: true });
     for (let k = 0; this.walking === dev; k = (k + 1) % n) {
       const preview = new Array(total).fill(null);
       const lg = inv[gOf[k]];
@@ -1310,9 +1317,9 @@ class Component extends DCLogic {
   setSpeed(n) { this.setState({ speed: Math.max(1, Math.min(100, Math.round(n))) }, () => { this._persist(); if (!this.animRunning) this.push(); }); }
   // Orientation toggles re-map the editor view; push too so the device stays in
   // sync with what's on screen (matches reverse/snake/run-length behavior).
-  toggleTranspose() { const l = this.calibLight(); this.setLight(this.state.calibLight, { transpose: !l.transpose }); }
-  toggleFlipH() { const l = this.calibLight(); this.setLight(this.state.calibLight, { flipH: !l.flipH }); }
-  toggleFlipV() { const l = this.calibLight(); this.setLight(this.state.calibLight, { flipV: !l.flipV }); }
+  toggleTranspose() { const g = this.calibGeom(); this.setSecGeom(this.state.calibSec, { transpose: !g.transpose }); }
+  toggleFlipH() { const g = this.calibGeom(); this.setSecGeom(this.state.calibSec, { flipH: !g.flipH }); }
+  toggleFlipV() { const g = this.calibGeom(); this.setSecGeom(this.state.calibSec, { flipV: !g.flipV }); }
 
   // H703B hardware limits: 45 LEDs per strand, 2 strands per controller = 90
   // segments max. One CloudGrid instance drives one controller; 3 controllers =
@@ -1324,7 +1331,15 @@ class Component extends DCLogic {
     const per = (dev) => this.state.sections.filter((s) => (s.dev || 0) === dev).length;
     const dev = this.state.devs.findIndex((_, i) => per(i) < 2);
     if (dev < 0) { this.setState({ status: "Every light has its 2 sections; add a light first" }); return; }
-    this.setSections(this.state.sections.concat([{ length: 44, reversed: false, serpentine: false, dev }]));
+    this.setSections(this.state.sections.concat([Object.assign({ length: 44, reversed: false, serpentine: false, dev }, this._geomLike(dev))]));
+  }
+  // Run length + orientation for a new strand: copy the light's last strand,
+  // else the last strand of any light, else defaults. Never a position.
+  _geomLike(dev) {
+    const own = this.state.sections.filter((sec) => (sec.dev || 0) === dev);
+    const src = own.length ? own[own.length - 1] : this.state.sections[this.state.sections.length - 1];
+    const g = src ? window.CG.sectionGeom(src) : this._defaultGeom();
+    return { rows: g.rows, transpose: g.transpose, flipH: g.flipH, flipV: g.flipV };
   }
   // Hand a section to the next light (wraps). The grid stays put; only which
   // controller the section's segments are written to changes.
@@ -2026,7 +2041,8 @@ class Component extends DCLogic {
     const selSet = st.selection ? new Set(st.selection) : null;
     const dragGhost = st.tool === "select" ? "rgba(52,207,107,0.28)" : st.selected;
     const LIGHT_TINTS = ["#34cf6b", "#3b82f6", "#f59e0b", "#ec4899", "#a855f7", "#14b8a6"];
-    const cl = st.lights[st.calibLight] || st.lights[0] || this._defaultLight();
+    const cs = st.sections[st.calibSec] || st.sections[0] || {};
+    const cl = window.CG.sectionGeom(cs); // calibrate-card geometry of the picked strand
     const cells = [];
     for (let k = 0; k < d.w * d.h; k++) {
       const vy = Math.floor(k / d.w), vx = k % d.w;
@@ -2052,7 +2068,7 @@ class Component extends DCLogic {
       else if (exists && selSet && selSet.has(logical)) style = Object.assign({}, style, { boxShadow: "inset 0 0 0 2px rgba(52,207,107,0.85)" });
       const corner = blk && blk.x === vx && blk.y === vy;
       cells.push({
-        idx: corner ? "L" + (blk.dev + 1) : logical, showIdx: corner || (exists && st.showIndices), style,
+        idx: corner ? "S" + (blk.sec + 1) : logical, showIdx: corner || (exists && st.showIndices), style,
         onDown: st.layoutMode ? ((e) => { if (e.button === 2) return; e.preventDefault(); this.layoutDown(vx, vy); }) : exists ? ((e) => {
           if (e.button === 2) return; e.preventDefault();
           const tool = this.state.tool;
@@ -2252,14 +2268,15 @@ class Component extends DCLogic {
       // calibrate
       rows: cl.rows, onRows: (e) => this.setRows(Number(e.target.value)),
       transposeBtn: this._btn(cl.transpose), flipHBtn: this._btn(cl.flipH), flipVBtn: this._btn(cl.flipV),
-      calibLights: st.lights.map((l, i) => ({ label: "Light " + (i + 1), style: Object.assign({}, this._btn(i === st.calibLight, { fs: "11.5px", pad: "5px 9px" }), i === st.calibLight ? { borderColor: LIGHT_TINTS[i % LIGHT_TINTS.length] } : {}), onPick: () => this.setState({ calibLight: i }) })),
-      calibTitle: "Calibrate · Light " + (st.calibLight + 1),
+      calibSecs: st.sections.map((sec, i) => ({ label: "S" + (i + 1) + " · L" + ((sec.dev || 0) + 1), style: Object.assign({}, this._btn(i === st.calibSec, { fs: "11.5px", pad: "5px 9px" }), i === st.calibSec ? { borderColor: LIGHT_TINTS[(sec.dev || 0) % LIGHT_TINTS.length] } : {}), onPick: () => this.setState({ calibSec: i }) })),
+      calibTitle: "Calibrate · S" + (st.calibSec + 1) + " (Light " + ((cs.dev || 0) + 1) + ")",
       lightX: cl.x, lightY: cl.y,
-      onLightX: (e) => this.setLightPos(st.calibLight, Number(e.target.value), cl.y), onLightY: (e) => this.setLightPos(st.calibLight, cl.x, Number(e.target.value)),
-      nudgeL: () => this.nudgeLight(-1, 0), nudgeR: () => this.nudgeLight(1, 0), nudgeU: () => this.nudgeLight(0, -1), nudgeD: () => this.nudgeLight(0, 1),
-      layoutBtn: this._btn(st.layoutMode), toggleLayout: () => this.toggleLayoutMode(), layoutLabel: st.layoutMode ? "Done placing" : "Place lights (drag)",
-      identify: () => this.identify(st.calibLight), walk: () => this.toggleWalk(st.calibLight),
-      walkBtn: this._btn(st.walkOn), walkLabel: st.walkOn ? "Stop walk" : "Walk segments",
+      onLightX: (e) => this.setSecPos(st.calibSec, Number(e.target.value), cl.y), onLightY: (e) => this.setSecPos(st.calibSec, cl.x, Number(e.target.value)),
+      nudgeL: () => this.nudgeSec(-1, 0), nudgeR: () => this.nudgeSec(1, 0), nudgeU: () => this.nudgeSec(0, -1), nudgeD: () => this.nudgeSec(0, 1),
+      layoutBtn: this._btn(st.layoutMode), toggleLayout: () => this.toggleLayoutMode(), layoutLabel: st.layoutMode ? "Done placing" : "Place strands (drag)",
+      identify: () => this.identify(cs.dev || 0), walk: () => this.toggleWalk(cs.dev || 0),
+      walkBtn: this._btn(st.walkOn), walkLabel: st.walkOn ? "Stop walk" : "Walk light " + ((cs.dev || 0) + 1),
+      identifyLabel: "Flash light " + ((cs.dev || 0) + 1),
       nudgeBtn: this._btn(false, { fs: "12px", pad: "5px 9px" }),
       addSection: () => this.addSection(), addBtn: this._btn(false, { fs: "11.5px", pad: "5px 9px" }),
       sections: st.sections.map((s, i) => ({ num: i + 1, length: s.length, canRemove: st.sections.length > 1, revStyle: this._btn(s.reversed, { fs: "11.5px", pad: "5px 9px" }), snakeStyle: this._btn(s.serpentine, { fs: "11.5px", pad: "5px 9px" }), onLen: (e) => this.setSectionLength(i, Number(e.target.value)), devLabel: "Light " + ((s.dev || 0) + 1), devStyle: this._btn((s.dev || 0) > 0, { fs: "11.5px", pad: "5px 9px" }), onDev: () => this.toggleSectionDev(i), onReverse: () => this.toggleReverse(i), onSnake: () => this.toggleSerpentine(i), onRemove: () => this.removeSection(i) })),

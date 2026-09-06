@@ -82,24 +82,22 @@ for (let iter = 0; iter < 2000; iter++) {
   check(same, "two-light encode→decode→reassemble reproduces the frame");
 }
 
-// --- 3. light blocks: round trip, legacy equality, per-light rows (ISC-48..50, 61) ---
+// --- 3. section blocks: round trip, legacy equality, per-section rows (ISC-48..50, 61, 64) ---
 for (let iter = 0; iter < 2000; iter++) {
   const nl = 1 + ri(4);
   const sections: any[] = [];
-  for (let dev = 0; dev < nl; dev++) for (let k = 0; k < 1 + ri(2); k++) sections.push({ length: 1 + ri(45), reversed: rnd() < 0.5, serpentine: rnd() < 0.5, dev });
+  for (let dev = 0; dev < nl; dev++) for (let k = 0; k < 1 + ri(2); k++) sections.push({ length: 1 + ri(45), reversed: rnd() < 0.5, serpentine: rnd() < 0.5, dev, rows: 1 + ri(45), transpose: rnd() < 0.5, flipH: rnd() < 0.5, flipV: rnd() < 0.5 });
   // shuffle so grouping is exercised
   for (let i = sections.length - 1; i > 0; i--) { const j = ri(i + 1); [sections[i], sections[j]] = [sections[j], sections[i]]; }
-  const lights: any[] = [];
-  let cx = 0;
-  for (let dev = 0; dev < nl; dev++) lights.push({ x: cx, y: ri(3), rows: 1 + ri(45), transpose: rnd() < 0.5, flipH: rnd() < 0.5, flipV: rnd() < 0.5 });
-  // non-overlapping: place each block right of the previous one's extent
-  let blocks = layoutBlocks(sections, lights);
-  for (const b of blocks) { lights[b.dev].x = cx; cx += b.w + ri(2); }
-  blocks = layoutBlocks(sections, lights);
   const grouped = sectionsGroupedByDev(sections);
+  // random non-overlapping placement, in a random screen order (so wire order != screen order)
+  const order: number[] = grouped.map((_: any, i: number) => i); for (let i = order.length - 1; i > 0; i--) { const j = ri(i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+  let cx = 0; const pre = layoutBlocks(grouped);
+  for (const i of order) { grouped[i].x = cx; grouped[i].y = ri(3); cx += pre[i].w + ri(2); }
+  const blocks = layoutBlocks(grouped);
   const totalAll = totalSegments(grouped);
   const { w, h } = canvasDims(blocks);
-  check(blocks.every((b: any, i: number) => i === 0 || b.dev > blocks[i - 1].dev), "blocks in light order");
+  check(blocks.every((b: any, i: number) => b.sec === i && b.offset === grouped.slice(0, i).reduce((a: number, s: any) => a + s.length, 0)), "blocks in wire order with wire offsets");
   let rt = true;
   for (let lg = 0; lg < totalAll; lg++) { const c = logicalToCanvas(lg, blocks); if (!c || canvasToLogical(c.vx, c.vy, blocks, totalAll) !== lg) rt = false; }
   check(rt, "logicalToCanvas ∘ canvasToLogical is identity on every logical index");
@@ -111,26 +109,26 @@ for (let iter = 0; iter < 2000; iter++) {
     if (!c || c.vx !== vx || c.vy !== vy) cells = false;
   }
   check(cells, "every covered canvas cell maps back to itself");
-  // 4-arg logicalToPhysical with uniform rows == 3-arg
-  const uni = lights.map((l) => Object.assign({}, l, { rows: lights[0].rows }));
+  // per-section rows drive serpentine: 4-arg with section rows == 3-arg only when uniform
+  const r0 = grouped[0].rows; const uni = grouped.map((s: any) => Object.assign({}, s, { rows: r0 }));
   let same = true;
-  for (let p = 0; p < totalAll; p++) if (logicalToPhysical(p, grouped, lights[0].rows, uni) !== logicalToPhysical(p, grouped, lights[0].rows)) same = false;
-  check(same, "logicalToPhysical 4-arg == 3-arg when rows uniform");
+  for (let p = 0; p < totalAll; p++) if (logicalToPhysical(p, uni, r0, []) !== logicalToPhysical(p, uni.map((s: any) => { const c = Object.assign({}, s); delete c.rows; return c; }), r0)) same = false;
+  check(same, "logicalToPhysical with section rows == legacy when uniform");
 }
-// legacy: one light at (0,0) equals the old global-orient grid for every cell
+// legacy: sections with no geometry, laid out left to right, equal the old global-orient grid
 for (let iter = 0; iter < 1000; iter++) {
-  const sections = [{ length: 1 + ri(45), reversed: false, serpentine: false }, { length: 1 + ri(45), reversed: false, serpentine: false }];
   const rows = 1 + ri(45), o = { transpose: rnd() < 0.5, flipH: rnd() < 0.5, flipV: rnd() < 0.5 };
+  const sections = [{ length: 1 + ri(45), reversed: false, serpentine: false, rows, ...o }];
   const total = totalSegments(sections), width = gridWidth(total, rows), d = gridDims(width, rows, o.transpose);
-  const blocks = layoutBlocks(sections, [Object.assign({ x: 0, y: 0, rows }, o)]);
+  const blocks = layoutBlocks(sections);
   const cd = canvasDims(blocks);
-  check(cd.w === d.w && cd.h === d.h, "single-light canvas equals legacy grid dims");
+  check(cd.w === d.w && cd.h === d.h, "single-section canvas equals legacy grid dims");
   let eq = true;
   for (let vy = 0; vy < d.h; vy++) for (let vx = 0; vx < d.w; vx++) {
     const legacy = visualToLogical(vx, vy, width, rows, o); const now = canvasToLogical(vx, vy, blocks, total);
     if ((legacy < total ? legacy : total) !== now) eq = false;
   }
-  check(eq, "single light at origin == legacy visualToLogical");
+  check(eq, "single section at origin == legacy visualToLogical");
 }
 console.log(`layout tests: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

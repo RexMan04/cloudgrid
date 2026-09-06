@@ -65,11 +65,11 @@ bun run dev
 
 Open **http://localhost:8787**, click **Connect device**, pick your light, and start painting. For more lights, click **+ Add light** in the Lights card, then **Connect** on the new row: the canvas grows by 88 cells (two 44-segment sections tagged with that light), and you calibrate those sections with Reverse / Snake exactly like the first light's. Each row connects and disconnects on its own; a drop on one never stalls the others. The **Light N** button on a section hands it to the next light.
 
-Placing and calibrating several lights is a feedback loop between the screen and the ceiling, not data entry. Each light is a block on the canvas with its own run length, orientation and position, and the **Calibrate** card works on one light at a time:
+Placing and calibrating lights is a feedback loop between the screen and the ceiling, not data entry. The physical unit is the **strand**: each section is a block on the canvas with its own run length, orientation and position, so two strands of one controller can hang in any order or place. The **Calibrate** card works on one strand at a time:
 
-- **Identify (flash)** turns that light solid white for a moment so you know which physical light you are editing.
-- **Walk segments** lights one segment at a time along that controller's wire while the matching cell lights on screen. If the ceiling dot and the screen dot move differently, hit **Reverse** / **Snake** on that light's sections or **Flip** / **Transpose** on the light until they agree.
-- **Place lights (drag)** turns the canvas into a layout: every light is a tinted, labelled block you drag to where it really hangs. Gaps between blocks are dead cells. The arrow buttons nudge the selected light one cell; the two number fields set its position exactly. (`bun install` first if you want editor types; the app itself has no runtime dependencies.)
+- **Flash light N** turns that strand's controller solid white for a moment so you know which physical light you are editing.
+- **Walk light N** lights one segment at a time along that controller's wire while the matching cell lights on screen. If the ceiling dot and the screen dot move differently, hit **Reverse** / **Snake** on the strand, **Flip** / **Transpose** it, or move it.
+- **Place strands (drag)** turns the canvas into a layout: every strand is a tinted (by light), labelled block you drag to where it really hangs, including swapping S1 and S2. Gaps between blocks are dead cells. The arrow buttons nudge the selected strand one cell; the two number fields set its position exactly. (`bun install` first if you want editor types; the app itself has no runtime dependencies.)
 
 One Bun process serves the whole thing: the static frontend and the AI endpoint. The browser talks to the lights directly over Web Bluetooth, so the server is only in the loop for AI generation.
 
