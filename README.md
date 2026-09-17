@@ -1,128 +1,139 @@
 # CloudGrid
 
-Design and control **Govee RGBIC dot lights** per-segment, straight from your browser over Bluetooth. No app, no cloud account, no API key.
+**A browser-based lighting editor that turns Govee dot strings into a programmable canvas.**
 
-Built to turn a Govee dot-string kit into a designable grid. Mine is a light-cloud on my basement ceiling.
+CloudGrid maps two-dimensional designs onto physical light strands and controls them directly over Web Bluetooth. Built for a 270-light H703B ceiling installation, it combines a pixel editor, multi-controller calibration, animation playback, and a reverse-engineered Bluetooth scene encoder.
 
-## Why I built this
+Lighting control runs locally, without a Govee cloud account or API key. Optional AI generation adds text-to-pattern and text-to-animation tools.
 
-I grabbed a Govee dot-string kit on a Black Friday deal a while back, 270 lights, basically for free, and I wanted to actually do something with them instead of stringing them on the house. So I decided to build a grid on my basement ceiling, a little cloud of lights.
+## Why I built it
 
-The problem is the Govee app has no real grid editor. There's no good way to design per-dot patterns or drop in an image and have it show up on the lights. These are string lights, so the app treats them as a strand, not a canvas. And the public Govee Cloud API only lets you set the whole strand to one color; it doesn't expose per-segment control for the H703B at all.
+I mounted a Govee dot-string kit as a light-cloud on my basement ceiling and wanted to treat it as a canvas. The installation was a two-dimensional arrangement, but the available controls treated it as a strand. I needed to paint designs, map them onto the actual wiring, and send individual segment colors to the controller.
 
-So I reverse-engineered the device's Bluetooth protocol from packet captures and built CloudGrid: a grid-based pattern maker that talks to the lights locally over Web Bluetooth, gives full per-dot control (the same as the app, without its limits), and lets me calibrate the physical layout (reversing sections and handling snake/zigzag wiring) so a clean design on screen maps correctly onto however the strip is actually mounted.
+I reverse-engineered the device's Bluetooth scene protocol from packet captures and built the editor around it. The core engineering challenges are translating canvas coordinates into physical wiring order, encoding compact scenes, and pacing Bluetooth writes within the hardware's limits.
 
-It's working well for my setup. I'm still developing it.
+## Current capabilities
 
-## Features
+| Area | Implemented functionality |
+| --- | --- |
+| Design editor | Brush, eraser, fill, line, rectangle, box selection, grid-cell eyedropper, and undo/redo |
+| Color control | Per-cell and master brightness, editable approved-color palette, optional palette snapping, and pattern generators |
+| Physical calibration | Movable strand blocks, reverse and serpentine wiring, transpose and flips, controller identification, and segment-walk tools |
+| Multiple controllers | One shared canvas, per-controller scene encoding, independent Bluetooth connections, and reconnect handling |
+| Motion | Persistent on-device effects, browser-streamed animations, directional scrolling, and GIF/video import |
+| Design sources | Image sampling, optional AI-generated grids and looping animations, and saved scenes with JSON import/export |
+| Diagnostics | Decoded-scene preview, BLE timing instrumentation, and clickable animation tests under **View** |
 
-- Connect to a Govee RGBIC device directly from Chrome/Edge (Web Bluetooth). The link **auto-reconnects** if it drops, and on page load the app **reconnects to the last device** with no re-pair (Chrome/Edge; Brave lacks that API, so you click Connect once).
-- A workspace **tool dock** (Photoshop-style): brush, eraser, bucket fill, line, rectangle, eyedropper, and box-select, with a tool-options bar for brush **size** and **brightness**. The eyedropper clones a cell's color *and* its brightness.
-- **Per-cell brightness** (paint at the brush brightness, or right-click a cell to set its level) and an **Output brightness** master that the on-screen canvas honors, so the preview is WYSIWYG.
-- **Undo / redo** (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y).
-- A consolidated **Designs** panel that gathers everything that creates a design: the approved palette, pattern generators, AI generation, image and GIF/video import, and saved scenes.
-- **Approved-colors palette:** a curated, editable color set. Flip **Snap** on and AI generation and imported images are restricted to those colors, so they render true to the LEDs instead of muddy. Gradients and hand-painting stay unconstrained.
-- Pattern generators including rainbows, stripes, checker, and a **two-color gradient**.
-- Configurable segment count, sections, and grid rows/columns; layout calibration in the right inspector (reverse a section, serpentine wiring, transpose / flip-H / flip-V).
-- Image import (samples onto the grid; snaps to the palette when Snap is on).
-- On-device effects via the H703B's native effect engine (Static, Gradient, Breathe, Twinkle, Cycle, Clockwise, Counter-CW) with adjustable speed; these persist and run on the device itself. **Static** holds a painted design dead still (it's the default), and choosing it while an animation is playing freezes the current frame; **Gradient** smoothly flows the dot colors into each other. The canvas shows an approximate on-screen preview for the motion effects.
-- Live animations streamed from the browser frame-by-frame: Rainbow flow, Color cycle, Chase, Sparkle, Breathe design, Wave, and **Scroll →/←/↓/↑** (slides your painted design and wraps). Plus GIF/video playback sampled onto the grid.
-- **AI generation**, static or **animated** (a looping multi-frame animation): describe it in words and Claude/OpenAI returns a color grid or frame sequence (needs an AI key in `.env`, see below). Honors the approved palette when Snap is on.
-- Saved scenes: save, load, delete, and export/import as JSON.
+**Status:** Actively developed for a personal H703B installation. The editor, protocol encoder, and calibration tools are implemented. H703B is the only hardware model tested; other models are unverified. Multi-controller routing has automated coverage, but performance depends on the physical installation.
 
-Two kinds of motion are available: the device's **native effects** (persistent, rendered on-device, no streaming) and **live animations** (the browser computes and streams each frame, so they stop when the tab closes). Plain painted designs are static scenes the device holds locally.
+## Engineering highlights
 
-## Requirements
+### Mapping a canvas onto physical wiring
 
-- [Bun](https://bun.sh)
-- A Chromium browser with Web Bluetooth: **Chrome or Edge** out of the box, or **Brave** with `brave://flags/#brave-web-bluetooth-api` enabled.
-- One or more Govee **H703B** dot-string lights, as many as you have. All of them drive one canvas: each calibration section is tagged with the light it is wired to (**Light 1**, **Light 2**, …), each light gets its own scene with its own background, and frames go out on every Bluetooth link at once. The H703B is the only device I've built and tested against. Other Govee RGBIC devices that use the same DIY-scene Bluetooth protocol may work, but I haven't tried them yet (adapting to more devices is a possible future step).
+Each strand is a movable block with its own dimensions, orientation, wiring direction, and controller assignment. Calibration translates the visual layout into physical segment indices, then splits the result into a scene for each controller. Gaps between blocks remain inactive canvas cells.
 
-## Stack
+This separates the design from the installation: a pattern can be painted spatially without manually reasoning about wire order.
 
-The machine-readable source of truth for the toolchain is [`mise.toml`](mise.toml) — run `mise install` in this directory to reproduce it. What the project runs on:
+### Reverse-engineered BLE protocol
 
-| Layer | What | Pinned in |
-|---|---|---|
-| Runtime | Bun (server is pure Bun stdlib, TypeScript executed directly) | `mise.toml`, `Dockerfile` (`oven/bun`) |
-| Dev types | `@types/bun` | `package.json` |
-| Deploy | Railway, via `Dockerfile` + `railway.json` | `Dockerfile` |
-| Browser APIs | Web Bluetooth (no server-side dependency) | n/a |
+The H703B uses 20-byte Bluetooth packets with XOR checksums. CloudGrid builds multi-packet `a3` scene streams, grouping segments by color to reduce packet count, then sends a commit command to apply the scene.
 
-Dependency updates are automated by [Renovate](renovate.json): it opens one PR per update (bun toolchain bumps are grouped), the PR is the review gate, and `git revert` of the merge is the rollback. Nothing lands without a human merging it.
+The encoder and decoder live in [web/cloudgrid-core.js](web/cloudgrid-core.js). The streamed preview decodes the same scene data prepared for transmission, allowing tests to check mapping and encoding together. Utilities in [tools/](tools/) decode BTSnoop captures, reassemble scene streams, and inspect captured device scenes.
 
-CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) installs the toolchain from `mise.toml` via `jdx/mise-action`, then typechecks (`tsc --noEmit`) and secret-scans (`gitleaks`). To get the same secret scan locally as a pre-commit hook, run once per clone:
+### Two animation paths
+
+| Mode | Execution | Behavior |
+| --- | --- | --- |
+| On-device effects | Light controller | Static, Gradient, Breathe, Twinkle, Cycle, Clockwise, and Counter-CW; continue independently of the browser |
+| Live animations | Browser over BLE | Procedural effects, scrolling designs, imported media, and AI frame sequences; require an active tab and connection |
+
+Static is the default. Native motion previews are approximations; rotational previews move dot positions along the strand. Streamed frames are sent sequentially, waiting for writes to finish before advancing.
+
+FPS is manually adjustable from **0.5 to 10**, with a default target of **4 FPS**. The target is not a hardware guarantee. Earlier H703B measurements over Windows BLE found roughly **3 FPS for full-color 88-segment frames** and **4–5 FPS for simpler frames**. These describe that configuration, not the entire 270-light installation. Fewer distinct colors generally mean fewer packets and shorter writes. Native effects avoid the per-frame streaming bottleneck.
+
+## Getting started
+
+### Requirements
+
+- **Bun**, with the project version pinned in [mise.toml](mise.toml).
+- **Brave or Microsoft Edge** with Web Bluetooth. In Brave, enable `brave://flags/#brave-web-bluetooth-api`.
+- A **Govee H703B** and Bluetooth-capable computer for physical output. The editor and preview can be explored without connected lights.
+
+### Run locally
+
+```bash
+git clone https://github.com/RexMan04/cloudgrid.git
+cd cloudgrid
+bun install
+bun run dev
+```
+
+Open **http://localhost:8787**. Connect a device from the Lights card, calibrate the layout, and start painting. Use **+ Add light** to attach another controller to the canvas.
+
+On Windows with WSL, run Bun inside WSL and open the app in your Windows browser. Use `localhost`, not the network IP, because Web Bluetooth requires a secure context.
+
+### Calibrate the installation
+
+1. Select a strand in the **Calibrate** card.
+2. Use **Flash light N** to identify its controller, then **Walk light N** to compare physical segment order with the on-screen path.
+3. Adjust Reverse, Snake, Flip, and Transpose to match the wiring.
+4. Use **Place strands (drag)** or position controls to arrange blocks to match the installation.
+
+Output brightness is reflected in the canvas. Physical color and motion still need to be checked on the lights: a decoded preview verifies software behavior, not the controller's rendering or individual LED behavior. The development installation occasionally exhibits hot-pink dots in hardware.
+
+### Optional AI generation
+
+Copy `.env.example` to `.env` and set either `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`. The Bun server makes generation requests and keeps the key server-side. Enable palette snapping to constrain generated colors to the approved palette.
+
+Painting, calibration, imports, and Bluetooth control work without an AI key.
+
+## Architecture
+
+```text
+Browser editor
+  ├─ Design + brightness + layout mapping
+  │    └─ Per-controller scenes → BLE encoder → Web Bluetooth → H703B
+  │                              └─ Scene decoder → streamed preview
+  └─ Optional generation request → Bun /api/generate → AI provider
+
+Bun serves the frontend and API from one process on localhost:8787.
+```
+
+The server uses Bun's standard library with **no runtime npm dependencies**. The frontend uses JavaScript and a vendored design-component runtime that loads React from a CDN; there is no frontend build step. CDN-loaded scripts and fonts mean the application is not fully self-contained offline.
+
+| Path | Responsibility |
+| --- | --- |
+| [web/CloudGrid.dc.html](web/CloudGrid.dc.html) | Editor UI, calibration, scene management, and playback |
+| [web/cloudgrid-core.js](web/cloudgrid-core.js) | BLE transport, scene encoder/decoder, layout mapping, and image sampling |
+| [web/captured-scenes.js](web/captured-scenes.js) | Captured native device scenes |
+| [server/index.ts](server/index.ts) | Static file server and generation endpoint |
+| [server/ai.ts](server/ai.ts) | Static and animated pattern generation |
+| [tools/](tools/) | Protocol analysis utilities and automated checks |
+
+## Development and verification
+
+Run the deterministic protocol and layout checks:
+
+```bash
+bun tools/test-emulator.ts
+bun tools/test-layout.ts
+```
+
+These exercise scene encode/decode round trips, single-controller compatibility, multi-controller segment ownership, and coordinate mapping. They do not verify radio reliability or physical lighting output.
+
+[CI](.github/workflows/ci.yml) runs TypeScript checking and Gitleaks secret scanning. Tool versions are pinned in [mise.toml](mise.toml), with dependency update PRs configured through [Renovate](renovate.json). Docker and Railway configuration are also included.
+
+To enable the repository's local pre-commit hook, install the pinned tools with `mise install`, then run:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-## Run
+## Future work
 
-```bash
-bun run dev
-```
-
-Open **http://localhost:8787**, click **Connect device**, pick your light, and start painting. For more lights, click **+ Add light** in the Lights card, then **Connect** on the new row: the canvas grows by 88 cells (two 44-segment sections tagged with that light), and you calibrate those sections with Reverse / Snake exactly like the first light's. Each row connects and disconnects on its own; a drop on one never stalls the others. The **Light N** button on a section hands it to the next light.
-
-Placing and calibrating lights is a feedback loop between the screen and the ceiling, not data entry. The physical unit is the **strand**: each section is a block on the canvas with its own run length, orientation and position, so two strands of one controller can hang in any order or place. The **Calibrate** card works on one strand at a time:
-
-- **Flash light N** turns that strand's controller solid white for a moment so you know which physical light you are editing.
-- **Walk light N** lights one segment at a time along that controller's wire while the matching cell lights on screen. If the ceiling dot and the screen dot move differently, hit **Reverse** / **Snake** on the strand, **Flip** / **Transpose** it, or move it.
-- **Place strands (drag)** turns the canvas into a layout: every strand is a tinted (by light), labelled block you drag to where it really hangs, including swapping S1 and S2. Gaps between blocks are dead cells. The arrow buttons nudge the selected strand one cell; the two number fields set its position exactly. (`bun install` first if you want editor types; the app itself has no runtime dependencies.)
-
-One Bun process serves the whole thing: the static frontend and the AI endpoint. The browser talks to the lights directly over Web Bluetooth, so the server is only in the loop for AI generation.
-
-> On Windows + WSL: run this **inside WSL**, then open `http://localhost:8787` in your Windows browser. Use the `localhost` URL, not the network IP. Web Bluetooth requires a secure context, and `localhost` qualifies.
-
-## AI generation (optional)
-
-The AI panel turns a text prompt into a color grid. The key stays server-side and never reaches the browser. Add one of these to `.env` (copy `.env.example`) and the panel works automatically:
-
-```
-ANTHROPIC_API_KEY=...      # or
-OPENAI_API_KEY=...
-```
-
-Everything else works without a key.
-
-## How it works
-
-The device speaks a plaintext BLE protocol (20-byte packets, XOR checksum). A per-segment scene is a multi-packet "a3" stream. The encoder groups segments by color (so a design with a few colors stays compact) rather than emitting a fixed-size entry per segment:
-
-```
-header (10): 01 <pktCount> 03 <dir> <speed> <bright> <bgR> <bgG> <bgB> <groupCount>
-groups:      for each distinct color, one variable-length run:
-             <segCount> <R> <G> <B> <segIndex>…   (segIndex repeated segCount times)
-```
-
-split across 20-byte writes (first packet `a3 00`, last `a3 ff`), then a commit packet `33 05 0a 20 03`. The protocol, scene encoder, and image sampler all live in [`web/cloudgrid-core.js`](web/cloudgrid-core.js).
-
-### Bluetooth frame rate (measured)
-
-Live animations stream one scene per frame, so the achievable frame rate is set by how fast a scene writes. Measured on an H703B over Windows BLE (`CG.bleRate()` exposes the live numbers):
-
-- A scene's write time scales with **packet count**, not raw bandwidth: the encoder spends a deliberate ~10ms between packets to keep the controller from mis-assembling the stream, so cost ≈ `packets × ~12ms + commit`. Packet count tracks the number of **distinct colors** in the frame (each color is one variable-length group).
-- An 88-segment **full-color** frame is ~9 packets ≈ **110ms** to write. A few-color frame (a scroll, say) is ~3 packets ≈ **37ms**.
-- Pushing frames back-to-back floods Windows BLE and triggers a disconnect/reconnect storm. Leaving **~180–250ms idle between writes** keeps the link stable. The sustained, stable ceiling is therefore **~3 full-grid frames/sec**; sparse/few-color frames reach ~4–5 fps.
-- So the animation loop is **clocked to the lights**: it pushes a frame, waits for the write to drain plus a stability gap, then advances. Every frame the lights show is consecutive (no skipping), and the on-screen preview steps at that same rate so it matches the lights. The Speed slider trades the idle gap within a safe floor.
-
-The exact ceiling is device-specific, so the Device card has a **Find limit** calibrator: it slides whatever you've painted on the grid (a discrete moving feature, so a dropped frame reads as an obvious jump, unlike a hue-flow where a skip is invisible) and steadily speeds it up. Click **Skipping!** the moment the motion starts jumping (a link drop auto-marks too). It stores the cadence at that point, with a safety margin, as a persistent cap that every animation respects. The preview always steps at the same rate the lights do, so what you judge on the lights is accurate.
-
-Planning consequence: live full-grid motion is inherently low-fps, and it gets worse as the grid grows (more segments and colors → more packets → slower writes). **Fewer distinct colors = fewer packets = faster frames**, so quantization (q=24 on animation frames) and palette-snapping directly raise the frame rate. For fluid motion at the eventual 270-light scale, lean on the device's **on-device effects** or low-color designs rather than streaming full-color frames.
-
-## Project layout
-
-- `web/`: the frontend. `CloudGrid.dc.html` is the UI (a self-contained design component, no build step; React loads from a CDN at runtime), `cloudgrid-core.js` is the Govee BLE protocol + image sampler, `support.js` is the design-component runtime.
-- `server/`: the Bun server. `index.ts` serves `web/` and the AI endpoint; `ai.ts` holds the AI call.
-- `tools/`: reverse-engineering utilities (BTSnoop decoder, a3 stream reassembler).
-
-## Roadmap
-
-- Map segment index → physical position. Done: any number of controllers on one canvas, each a placed block.
-- dir `0x13` is the DIY-scene render mode, and speed decides its behavior on-device: speed 0 holds the design dead still (**Static**), speed > 0 smoothly flows the dot colors into each other (**Gradient**). Both are exposed as effects; painted designs and live-animation frames always push at speed 0 so they stay put.
-- Scene playlists / a frame-by-frame animation editor.
-- Broader device support beyond the H703B.
+- Scene playlists and a frame-by-frame animation editor.
+- Hardware validation and protocol adaptation for additional device models.
+- Screen-wide color sampling beyond the current grid-cell eyedropper.
 
 ## License
 
